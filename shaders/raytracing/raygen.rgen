@@ -1,0 +1,313 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
+
+#include "rt_common.glsl"
+
+// ============================================================================
+// Descriptor Bindings (All in Set 0 for simplicity)
+// ============================================================================
+
+// Binding 0: Acceleration structure
+layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+
+// Binding 1-2: Output images
+layout(set = 0, binding = 1, rgba16f) uniform image2D reflectionOutput;
+layout(set = 0, binding = 2, r16f) uniform image2D shadowOutput;
+
+// Binding 3: Camera and settings uniform buffer
+layout(set = 0, binding = 3) uniform RTUniforms {
+    mat4 viewInverse;
+    mat4 projInverse;
+    vec4 cameraPosition;      // xyz = position, w = unused
+    vec4 lightDirection;      // xyz = direction (normalized), w = intensity
+    vec4 lightColor;          // rgb = color, a = unused
+    int frameNumber;
+    int samplesPerPixel;
+    int maxBounces;
+    float reflectionBias;
+    float shadowBias;
+    float shadowSoftness;
+    int flags;                // Bit 0: enable reflections, Bit 1: enable shadows
+    int debugMode;
+} uniforms;
+
+// Binding 4: Environment map for reflections (shared with IBL)
+layout(set = 0, binding = 4) uniform samplerCube environmentMap;
+
+// ============================================================================
+// Ray Payload
+// ============================================================================
+
+layout(location = 0) rayPayloadEXT struct RayPayload {
+    vec3 color;
+    float hitT;
+    vec3 normal;
+    float metallic;
+    vec3 albedo;    // Base color for tinting reflections
+    float roughness;
+    int hit;        // 0 = miss, 1 = hit
+} payload;
+
+layout(location = 1) rayPayloadEXT struct ShadowPayload {
+    float visibility;  // 0 = in shadow, 1 = lit
+} shadowPayload;
+
+// ============================================================================
+// Main
+// ============================================================================
+
+void main() {
+    const uvec2 pixelCoord = gl_LaunchIDEXT.xy;
+    const uvec2 launchSize = gl_LaunchSizeEXT.xy;
+
+    // Initialize RNG
+    uint rngState = initRNG(pixelCoord, uint(uniforms.frameNumber));
+
+    // Get UV coordinates (normalized device coordinates)
+    vec2 uv = (vec2(pixelCoord) + 0.5) / vec2(launchSize);
+    vec2 ndc = uv * 2.0 - 1.0;  // [-1, 1]
+
+    // Generate primary ray from camera
+    vec4 origin = uniforms.viewInverse * vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 target = uniforms.projInverse * vec4(ndc.x, ndc.y, 1.0, 1.0);
+    target /= target.w;
+    vec4 direction = uniforms.viewInverse * vec4(normalize(target.xyz), 0.0);
+
+    vec3 rayOrigin = origin.xyz;
+    vec3 rayDir = normalize(direction.xyz);
+
+    // Trace primary ray to get hit information
+    payload.color = vec3(0.0);
+    payload.hitT = -1.0;
+    payload.normal = vec3(0.0, 1.0, 0.0);
+    payload.metallic = 0.0;
+    payload.roughness = 1.0;
+    payload.hit = 0;
+
+    traceRayEXT(
+        topLevelAS,
+        gl_RayFlagsOpaqueEXT,
+        0xFF,
+        0,              // SBT offset (hit group 0)
+        0,              // SBT stride
+        0,              // miss index
+        rayOrigin,
+        0.001,
+        rayDir,
+        10000.0,
+        0               // payload location
+    );
+
+    // If we missed (hit sky), output defaults
+    if (payload.hit == 0) {
+        imageStore(reflectionOutput, ivec2(pixelCoord), vec4(0.0));
+        imageStore(shadowOutput, ivec2(pixelCoord), vec4(1.0));
+        return;
+    }
+
+    // We hit geometry - extract hit information
+    vec3 worldPos = rayOrigin + rayDir * payload.hitT;
+    vec3 normal = payload.normal;
+
+    // Get material properties from closest hit shader (via payload)
+    float metallic = payload.metallic;
+    float roughness = payload.roughness;
+
+    // View direction
+    vec3 viewDir = normalize(uniforms.cameraPosition.xyz - worldPos);
+
+    // Initialize outputs
+    vec3 reflectionColor = vec3(0.0);
+    float shadowValue = 1.0;
+
+    bool enableReflections = (uniforms.flags & 1) != 0;
+    bool enableShadows = (uniforms.flags & 2) != 0;
+
+    // ========================================================================
+    // Ray-Traced Reflections (with multiple samples and bounces)
+    // ========================================================================
+
+    if (enableReflections && metallic > 0.1) {
+        int reflectionSamples = uniforms.samplesPerPixel;
+
+        for (int sampleIdx = 0; sampleIdx < reflectionSamples; sampleIdx++) {
+            vec3 currentPos = worldPos;
+            vec3 currentNormal = normal;
+            vec3 currentViewDir = viewDir;
+            float currentMetallic = metallic;
+            float currentRoughness = roughness;
+
+            // Start throughput with primary surface's albedo tinted by metallic
+            vec3 throughput = payload.albedo * currentMetallic;
+
+            int maxBounces = uniforms.maxBounces;
+
+            for (int bounce = 0; bounce < maxBounces; bounce++) {
+                // Calculate reflection direction using GGX importance sampling
+                vec3 reflectDir;
+                if (currentRoughness < 0.02) {
+                    // Near-perfect mirror - just reflect
+                    reflectDir = reflect(-currentViewDir, currentNormal);
+                } else {
+                    // GGX importance sampling
+                    reflectDir = sampleGGXReflection(currentViewDir, currentNormal, currentRoughness, rngState);
+
+                    // If reflection goes below surface, try a few more times
+                    int maxAttempts = 8;
+                    int attempt = 0;
+                    while (dot(reflectDir, currentNormal) <= 0.0 && attempt < maxAttempts) {
+                        reflectDir = sampleGGXReflection(currentViewDir, currentNormal, currentRoughness, rngState);
+                        attempt++;
+                    }
+
+                    // Final fallback: reflect around normal
+                    if (dot(reflectDir, currentNormal) <= 0.0) {
+                        reflectDir = reflect(-currentViewDir, currentNormal);
+                    }
+                }
+
+                // Use BOTH normal offset AND tMin for robust self-intersection avoidance
+                vec3 offsetOrigin = currentPos + currentNormal * uniforms.reflectionBias;
+                float tMin = 0.001;
+
+                // Trace reflection ray
+                payload.color = vec3(0.0);
+                payload.hitT = -1.0;
+                payload.hit = 0;
+
+                traceRayEXT(
+                    topLevelAS,
+                    gl_RayFlagsOpaqueEXT,
+                    0xFF,
+                    0, 0, 0,
+                    offsetOrigin,
+                    tMin,
+                    reflectDir,
+                    10000.0,
+                    0
+                );
+
+                if (payload.hit == 0) {
+                    // Hit sky - add environment color and stop
+                    vec3 clampedColor = min(payload.color, vec3(3.0));
+                    reflectionColor += throughput * clampedColor;
+                    break;
+                }
+
+                // Hit a surface
+                float hitMetallic = payload.metallic;
+
+                if (hitMetallic < 0.1 || bounce == maxBounces - 1) {
+                    // Hit matte surface or last bounce - use its color and stop
+                    vec3 clampedColor = min(payload.color, vec3(3.0));
+                    reflectionColor += throughput * clampedColor;
+                    break;
+                }
+
+                // Hit another reflective surface - continue bouncing
+                currentPos = currentPos + reflectDir * payload.hitT;
+                currentNormal = payload.normal;
+                currentViewDir = -reflectDir;
+                currentMetallic = hitMetallic;
+                currentRoughness = payload.roughness;
+
+                // Accumulate reflectivity tinted by surface albedo
+                throughput *= payload.albedo * currentMetallic;
+            }
+        }
+
+        // Average the samples
+        reflectionColor /= float(reflectionSamples);
+    }
+
+    // ========================================================================
+    // Ray-Traced Soft Shadows
+    // ========================================================================
+
+    if (enableShadows) {
+        vec3 lightDir = normalize(-uniforms.lightDirection.xyz);
+
+        // Always trace shadow rays regardless of normal direction
+        // The PBR shader handles NdotL attenuation separately
+        // We just need to know if light can reach this point
+
+        // Accumulate shadow samples
+        float shadowSum = 0.0;
+        int shadowSamples = uniforms.samplesPerPixel;
+
+        // Use tMin (ray start distance) as the bias instead of position offset
+        // This is more robust because it works regardless of surface orientation
+        // shadowBias is used directly as tMin to skip geometry near the origin
+        float tMin = uniforms.shadowBias;
+
+        for (int i = 0; i < shadowSamples; i++) {
+            // Jitter light direction for soft shadows
+            vec3 sampleDir = lightDir;
+            if (uniforms.shadowSoftness > 0.0) {
+                float coneAngle = uniforms.shadowSoftness;
+                float cosThetaMax = cos(coneAngle);
+                sampleDir = sampleCone(lightDir, cosThetaMax, rngState);
+            }
+
+            // Trace shadow ray from the hit point
+            // Use shadowBias as tMin to avoid self-intersection
+            shadowPayload.visibility = 0.0;
+
+            traceRayEXT(
+                topLevelAS,
+                gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT,
+                0xFF,
+                0,
+                0,
+                1,              // miss index (shadow miss shader)
+                worldPos,       // Start from hit position
+                tMin,           // Use shadowBias as tMin to skip self-intersection
+                sampleDir,
+                10000.0,
+                1               // payload location (shadow payload)
+            );
+
+            shadowSum += shadowPayload.visibility;
+        }
+
+        shadowValue = shadowSum / float(shadowSamples);
+    }
+
+    // ========================================================================
+    // Debug Modes
+    // ========================================================================
+
+    if (uniforms.debugMode > 0) {
+        switch (uniforms.debugMode) {
+            case 1: // Normals
+                reflectionColor = normal * 0.5 + 0.5;
+                shadowValue = 1.0;
+                break;
+            case 2: // Hit distance (normalized)
+                reflectionColor = vec3(payload.hitT / 100.0);  // Normalized hit distance
+                shadowValue = 1.0;
+                break;
+            case 3: // Metallic
+                reflectionColor = vec3(metallic);
+                shadowValue = 1.0;
+                break;
+            case 4: // Roughness
+                reflectionColor = vec3(roughness);
+                shadowValue = 1.0;
+                break;
+            case 5: // Reflections only
+                // Keep reflection color as-is
+                shadowValue = 1.0;
+                break;
+            case 6: // Shadows only
+                reflectionColor = vec3(0.0);
+                // Keep shadow value as-is
+                break;
+        }
+    }
+
+    // Store results
+    imageStore(reflectionOutput, ivec2(pixelCoord), vec4(reflectionColor, 1.0));
+    imageStore(shadowOutput, ivec2(pixelCoord), vec4(shadowValue));
+}

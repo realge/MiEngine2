@@ -1,0 +1,340 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{74995e43-69a7-4abe-8666-9e6f8ea4b932}</ProjectGuid>
+    <RootNamespace>MiEngine2</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IncludePath>C:\VulkanSDK\1.4.304.1\Include;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\VulkanSDK\1.4.304.1\Lib;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\lib-vc2022;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IncludePath>C:\VulkanSDK\1.4.304.1\Include;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\VulkanSDK\1.4.304.1\Lib;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\lib-vc2022;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>C:\VulkanSDK\1.4.304.1\Include;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\include;C:\Users\13667\imgui;C:\Users\13667\imgui\backends;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\VulkanSDK\1.4.304.1\Lib;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\lib-vc2022;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>C:\VulkanSDK\1.4.304.1\Include;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\include;C:\Users\13667\imgui;C:\Users\13667\imgui\backends;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\VulkanSDK\1.4.304.1\Lib;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\lib-vc2022;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)include;C:\Users\13667\Downloads\glm-1.0.1-light;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;libfbxsdk.lib;libxml2.lib;zlib.lib;libfbxsdk-md.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\lib\x64\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)include;C:\Users\13667\Downloads\glm-1.0.1-light;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\lib\x64\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>FBXSDK_SHARED;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)include;C:\Users\13667\Downloads\glm-1.0.1-light;C:\Users\13667\imgui;C:\Users\13667\imgui\backends;C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;libfbxsdk.lib;libxml2.lib;zlib.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\lib\x64\debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy /y /d "C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\lib\x64\debug\libfbxsdk.dll" "$(OutDir)"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>FBXSDK_SHARED;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)include;C:\Users\13667\Downloads\glm-1.0.1-light;C:\Users\13667\imgui;C:\Users\13667\imgui\backends;C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;libfbxsdk.lib;libxml2.lib;zlib.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\lib\x64\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>xcopy /y /d "C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\lib\x64\release\libfbxsdk.dll" "$(OutDir)"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="C:\Users\13667\imgui\backends\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="C:\Users\13667\imgui\imgui.cpp" />
+    <ClCompile Include="C:\Users\13667\imgui\imgui_demo.cpp" />
+    <ClCompile Include="C:\Users\13667\imgui\imgui_draw.cpp" />
+    <ClCompile Include="C:\Users\13667\imgui\imgui_impl_glfw.cpp" />
+    <ClCompile Include="C:\Users\13667\imgui\imgui_tables.cpp" />
+    <ClCompile Include="C:\Users\13667\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="include\material\Material.cpp" />
+    <ClCompile Include="src\actor\MiEmptyActor.cpp" />
+    <ClCompile Include="src\actor\MiStaticMeshActor.cpp" />
+    <ClCompile Include="src\animation\AnimationClip.cpp" />
+    <ClCompile Include="src\animation\SkeletalMeshComponent.cpp" />
+    <ClCompile Include="src\animation\Skeleton.cpp" />
+    <ClCompile Include="src\asset\AssetBrowserWindow.cpp" />
+    <ClCompile Include="src\asset\AssetImporter.cpp" />
+    <ClCompile Include="src\asset\AssetRegistry.cpp" />
+    <ClCompile Include="src\asset\MeshCache.cpp" />
+    <ClCompile Include="src\asset\MeshLibrary.cpp" />
+    <ClCompile Include="src\camera\Camera.cpp" />
+    <ClCompile Include="src\component\MiStaticMeshComponent.cpp" />
+    <ClCompile Include="src\core\Input.cpp" />
+    <ClCompile Include="src\core\JsonIO.cpp" />
+    <ClCompile Include="src\core\MiActor.cpp" />
+    <ClCompile Include="src\core\MiComponent.cpp" />
+    <ClCompile Include="src\core\MiObject.cpp" />
+    <ClCompile Include="src\core\MiSceneComponent.cpp" />
+    <ClCompile Include="src\core\MiTransform.cpp" />
+    <ClCompile Include="src\core\MiTypeRegistry.cpp" />
+    <ClCompile Include="src\core\MiWorld.cpp" />
+    <ClCompile Include="src\debug\ActorSpawnerPanel.cpp" />
+    <ClCompile Include="src\debug\CameraDebugPanel.cpp" />
+    <ClCompile Include="src\debug\DebugPanel.cpp" />
+    <ClCompile Include="src\debug\DebugUIManager.cpp" />
+    <ClCompile Include="src\debug\MaterialDebugPanel.cpp" />
+    <ClCompile Include="src\debug\PerformancePanel.cpp" />
+    <ClCompile Include="src\debug\RayTracingDebugPanel.cpp" />
+    <ClCompile Include="src\debug\RenderDebugPanel.cpp" />
+    <ClCompile Include="src\debug\SceneHierarchyPanel.cpp" />
+    <ClCompile Include="src\debug\ScenePanel.cpp" />
+    <ClCompile Include="src\debug\SettingsPanel.cpp" />
+    <ClCompile Include="src\debug\WaterDebugPanel.cpp" />
+    <ClCompile Include="src\loader\ModelLoader.cpp" />
+    <ClCompile Include="src\loader\SkeletalModelLoader.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\mesh\Mesh.cpp" />
+    <ClCompile Include="src\mesh\SkeletalMesh.cpp" />
+    <ClCompile Include="src\physics\ColliderComponent.cpp" />
+    <ClCompile Include="src\physics\PhysicsWorld.cpp" />
+    <ClCompile Include="src\physics\RigidBodyComponent.cpp" />
+    <ClCompile Include="src\project\Project.cpp" />
+    <ClCompile Include="src\project\ProjectLauncher.cpp" />
+    <ClCompile Include="src\project\ProjectManager.cpp" />
+    <ClCompile Include="src\project\ProjectSerializer.cpp" />
+    <ClCompile Include="src\raytracing\RayTracingSystem.cpp" />
+    <ClCompile Include="src\Renderer\IBLSystem.cpp" />
+    <ClCompile Include="src\Renderer\PointLightShadowSystem.cpp" />
+    <ClCompile Include="src\Renderer\ShadowSystem.cpp" />
+    <ClCompile Include="src\Renderer\WaterSystem.cpp" />
+    <ClCompile Include="src\scene\Scene.cpp" />
+    <ClCompile Include="src\scene\SceneSerializer.cpp" />
+    <ClCompile Include="src\scene\SceneSkeletal.cpp" />
+    <ClCompile Include="src\texture\Texture.cpp" />
+    <ClCompile Include="src\Utils\TextureUtils.cpp" />
+    <ClCompile Include="VulkanRenderer.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\actor\MiEmptyActor.h" />
+    <ClInclude Include="include\actor\MiStaticMeshActor.h" />
+    <ClInclude Include="include\animation\AnimationClip.h" />
+    <ClInclude Include="include\animation\SkeletalMeshComponent.h" />
+    <ClInclude Include="include\animation\Skeleton.h" />
+    <ClInclude Include="include\asset\AssetBrowserWindow.h" />
+    <ClInclude Include="include\asset\AssetImporter.h" />
+    <ClInclude Include="include\asset\AssetRegistry.h" />
+    <ClInclude Include="include\asset\AssetTypes.h" />
+    <ClInclude Include="include\asset\MeshCache.h" />
+    <ClInclude Include="include\asset\MeshLibrary.h" />
+    <ClInclude Include="include\camera\Camera.h" />
+    <ClInclude Include="include\component\MiStaticMeshComponent.h" />
+    <ClInclude Include="include\core\Application.h" />
+    <ClInclude Include="include\core\Game.h" />
+    <ClInclude Include="include\core\Input.h" />
+    <ClInclude Include="include\core\JsonIO.h" />
+    <ClInclude Include="include\core\MiActor.h" />
+    <ClInclude Include="include\core\MiComponent.h" />
+    <ClInclude Include="include\core\MiCore.h" />
+    <ClInclude Include="include\core\MiDelegate.h" />
+    <ClInclude Include="include\core\MiObject.h" />
+    <ClInclude Include="include\core\MiSceneComponent.h" />
+    <ClInclude Include="include\core\MiTransform.h" />
+    <ClInclude Include="include\core\MiTypeRegistry.h" />
+    <ClInclude Include="include\core\MiWorld.h" />
+    <ClInclude Include="include\debug\ActorSpawnerPanel.h" />
+    <ClInclude Include="include\debug\CameraDebugPanel.h" />
+    <ClInclude Include="include\debug\DebugPanel.h" />
+    <ClInclude Include="include\debug\DebugUIManager.h" />
+    <ClInclude Include="include\debug\MaterialDebugPanel.h" />
+    <ClInclude Include="include\debug\PerformancePanel.h" />
+    <ClInclude Include="include\debug\RayTracingDebugPanel.h" />
+    <ClInclude Include="include\debug\RenderDebugPanel.h" />
+    <ClInclude Include="include\debug\SceneHierarchyPanel.h" />
+    <ClInclude Include="include\debug\SettingsPanel.h" />
+    <ClInclude Include="include\debug\WaterDebugPanel.h" />
+    <ClInclude Include="include\loader\ModelLoader.h" />
+    <ClInclude Include="include\material\Material.h" />
+    <ClInclude Include="include\mesh\Mesh.h" />
+    <ClInclude Include="include\mesh\SkeletalMesh.h" />
+    <ClInclude Include="include\physics\ColliderComponent.h" />
+    <ClInclude Include="include\physics\Component.h" />
+    <ClInclude Include="include\physics\PhysicsWorld.h" />
+    <ClInclude Include="include\physics\RigidBodyComponent.h" />
+    <ClInclude Include="include\project\Project.h" />
+    <ClInclude Include="include\project\ProjectLauncher.h" />
+    <ClInclude Include="include\project\ProjectManager.h" />
+    <ClInclude Include="include\project\ProjectSerializer.h" />
+    <ClInclude Include="include\raytracing\RayTracingSystem.h" />
+    <ClInclude Include="include\raytracing\RayTracingTypes.h" />
+    <ClInclude Include="include\Renderer\IBLSystem.h" />
+    <ClInclude Include="include\Renderer\PointLightShadowSystem.h" />
+    <ClInclude Include="include\Renderer\ShadowSystem.h" />
+    <ClInclude Include="include\Renderer\WaterSystem.h" />
+    <ClInclude Include="include\scene\Scene.h" />
+    <ClInclude Include="include\texture\Texture.h" />
+    <ClInclude Include="include\Utils\CommonVertex.h" />
+    <ClInclude Include="include\Utils\TextureUtils.h" />
+    <ClInclude Include="src\Games\Editor\EditorGame.h" />
+    <ClInclude Include="src\Games\FlappyBird\FlappyBirdGame.h" />
+    <ClInclude Include="src\Games\Minecraft\MinecraftGame.h" />
+    <ClInclude Include="src\Games\PhysicsTest\PhysicsTestGame.h" />
+    <ClInclude Include="src\Games\PointLightTest\PointLightTestGame.h" />
+    <ClInclude Include="src\Games\RayTracingTest\RayTracingTestGame.h" />
+    <ClInclude Include="src\Games\ShadowTest\ShadowTestGame.h" />
+    <ClInclude Include="src\Games\SkeletalAnimationTest\SkeletalAnimationTestGame.h" />
+    <ClInclude Include="src\Games\WaterTest\WaterTestGame.h" />
+    <ClInclude Include="src\SandboxGame.h" />
+    <ClInclude Include="VulkanRenderer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="shaders\ComputerShader.frag.spv" />
+    <Content Include="shaders\ComputeShader.frag" />
+    <Content Include="shaders\fullscreen.vert" />
+    <Content Include="shaders\fullscreen_vert.spv" />
+    <Content Include="shaders\pbr.frag" />
+    <Content Include="shaders\pbr.frag.bak" />
+    <Content Include="shaders\pbr.frag.spv" />
+    <Content Include="shaders\pbr.vert" />
+    <Content Include="shaders\pbr.vert.spv" />
+    <Content Include="shaders\pbr_frag.spv" />
+    <Content Include="shaders\pbr_vert.spv" />
+    <Content Include="shaders\shadow.frag" />
+    <Content Include="shaders\shadow.frag.spv" />
+    <Content Include="shaders\shadow.vert" />
+    <Content Include="shaders\shadow.vert.spv" />
+    <Content Include="shaders\shadow_vert.spv" />
+    <Content Include="shaders\skybox.frag" />
+    <Content Include="shaders\skybox.frag.spv" />
+    <Content Include="shaders\skybox.vert" />
+    <Content Include="shaders\skybox.vert.spv" />
+    <Content Include="shaders\tonemapping.frag" />
+    <Content Include="shaders\tonemapping_frag.spv" />
+    <Content Include="shaders\VertexShader.vert" />
+    <Content Include="shaders\VertexShader.vert.spv" />
+    <Content Include="shaders\water.vert" />
+    <Content Include="shaders\water.vert.spv" />
+    <Content Include="shaders\water.frag" />
+    <Content Include="shaders\water.frag.spv" />
+    <Content Include="shaders\water_simulation.comp" />
+    <Content Include="shaders\water_simulation.comp.spv" />
+    <Content Include="shaders\water_normals.comp" />
+    <Content Include="shaders\water_normals.comp.spv" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

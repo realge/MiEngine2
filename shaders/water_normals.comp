@@ -1,0 +1,61 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Input height map
+layout(set = 0, binding = 0, r32f) uniform readonly image2D heightMap;
+
+// Output normal map
+layout(set = 0, binding = 1, rgba8) uniform writeonly image2D normalMap;
+
+// Normal generation parameters via push constants
+layout(push_constant) uniform NormalParams {
+    int gridSize;
+    float heightScale;
+    float texelSize;  // 1.0 / gridSize
+    float padding;
+} params;
+
+void main() {
+    ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    // Bounds check
+    if (texCoord.x >= params.gridSize || texCoord.y >= params.gridSize) {
+        return;
+    }
+
+    // Sample heights using Sobel filter for smoother normals
+    // 3x3 kernel centered on current pixel
+    float h00 = imageLoad(heightMap, clamp(texCoord + ivec2(-1, -1), ivec2(0), ivec2(params.gridSize - 1))).r;
+    float h10 = imageLoad(heightMap, clamp(texCoord + ivec2(0, -1), ivec2(0), ivec2(params.gridSize - 1))).r;
+    float h20 = imageLoad(heightMap, clamp(texCoord + ivec2(1, -1), ivec2(0), ivec2(params.gridSize - 1))).r;
+    float h01 = imageLoad(heightMap, clamp(texCoord + ivec2(-1, 0), ivec2(0), ivec2(params.gridSize - 1))).r;
+    float h21 = imageLoad(heightMap, clamp(texCoord + ivec2(1, 0), ivec2(0), ivec2(params.gridSize - 1))).r;
+    float h02 = imageLoad(heightMap, clamp(texCoord + ivec2(-1, 1), ivec2(0), ivec2(params.gridSize - 1))).r;
+    float h12 = imageLoad(heightMap, clamp(texCoord + ivec2(0, 1), ivec2(0), ivec2(params.gridSize - 1))).r;
+    float h22 = imageLoad(heightMap, clamp(texCoord + ivec2(1, 1), ivec2(0), ivec2(params.gridSize - 1))).r;
+
+    // Sobel operator for gradients
+    // Gx kernel: [-1, 0, 1; -2, 0, 2; -1, 0, 1]
+    // Gy kernel: [-1, -2, -1; 0, 0, 0; 1, 2, 1]
+    float dx = (h20 + 2.0 * h21 + h22) - (h00 + 2.0 * h01 + h02);
+    float dy = (h02 + 2.0 * h12 + h22) - (h00 + 2.0 * h10 + h20);
+
+    // Scale gradients by height scale and texel size
+    // The factor of 8 comes from the Sobel kernel weights
+    float scale = params.heightScale / (8.0 * params.texelSize);
+    dx *= scale;
+    dy *= scale;
+
+    // Construct normal from gradients
+    // Normal = normalize(cross(tangent_x, tangent_z))
+    // tangent_x = (1, dx, 0), tangent_z = (0, dy, 1)
+    // cross = (-dx, 1, -dy)
+    vec3 normal = normalize(vec3(-dx, 1.0, -dy));
+
+    // Pack normal from [-1, 1] to [0, 1] range for storage
+    vec3 packedNormal = normal * 0.5 + 0.5;
+
+    // Write output (alpha = 1.0)
+    imageStore(normalMap, texCoord, vec4(packedNormal, 1.0));
+}

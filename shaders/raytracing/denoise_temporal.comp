@@ -1,0 +1,149 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+// Temporal accumulation denoiser
+// Uses luminance-weighted blending for better HDR handling
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// Input: Current frame RT output (noisy)
+layout(set = 0, binding = 0, rgba16f) uniform readonly image2D currentReflections;
+layout(set = 0, binding = 1, r16f) uniform readonly image2D currentShadows;
+
+// History buffers - accumulated result from previous frames
+layout(set = 0, binding = 2, rgba16f) uniform image2D historyReflections;
+layout(set = 0, binding = 3, r16f) uniform image2D historyShadows;
+
+// Output: Denoised result
+layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D outputReflections;
+layout(set = 0, binding = 5, r16f) uniform writeonly image2D outputShadows;
+
+layout(set = 0, binding = 6) uniform DenoiseUniforms {
+    mat4 prevViewProj;
+    mat4 currViewProjInv;
+    vec4 cameraPos;
+    float temporalBlend;
+    float varianceClipGamma;
+    int frameNumber;
+    int enableTemporal;
+} uniforms;
+
+float luminance(vec3 c) {
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+// Reinhard tonemapping for variance calculation (compresses HDR range)
+vec3 tonemap(vec3 c) {
+    return c / (1.0 + luminance(c));
+}
+
+vec3 tonemapInverse(vec3 c) {
+    return c / max(1.0 - luminance(c), 0.001);
+}
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageSize = imageSize(currentReflections);
+
+    if (pixelCoord.x >= imageSize.x || pixelCoord.y >= imageSize.y) {
+        return;
+    }
+
+    // Load current frame (noisy)
+    vec3 current = imageLoad(currentReflections, pixelCoord).rgb;
+    float currentShadow = imageLoad(currentShadows, pixelCoord).r;
+
+    // If disabled or first few frames, output current directly
+    if (uniforms.enableTemporal == 0 || uniforms.frameNumber <= 1) {
+        imageStore(outputReflections, pixelCoord, vec4(current, 1.0));
+        imageStore(outputShadows, pixelCoord, vec4(currentShadow));
+        imageStore(historyReflections, pixelCoord, vec4(current, 1.0));
+        imageStore(historyShadows, pixelCoord, vec4(currentShadow));
+        return;
+    }
+
+    // Load history
+    vec3 history = imageLoad(historyReflections, pixelCoord).rgb;
+    float historyShadow = imageLoad(historyShadows, pixelCoord).r;
+
+    // Compute neighborhood statistics in tonemapped space (handles HDR better)
+    vec3 m1 = vec3(0.0);  // Mean
+    vec3 m2 = vec3(0.0);  // Squared mean (for variance)
+    float shadowM1 = 0.0;
+    float shadowM2 = 0.0;
+
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            ivec2 coord = clamp(pixelCoord + ivec2(dx, dy), ivec2(0), imageSize - 1);
+            vec3 s = tonemap(imageLoad(currentReflections, coord).rgb);
+            float ss = imageLoad(currentShadows, coord).r;
+            m1 += s;
+            m2 += s * s;
+            shadowM1 += ss;
+            shadowM2 += ss * ss;
+        }
+    }
+
+    m1 /= 9.0;
+    m2 /= 9.0;
+    shadowM1 /= 9.0;
+    shadowM2 /= 9.0;
+
+    // Standard deviation
+    vec3 sigma = sqrt(max(m2 - m1 * m1, vec3(0.0)));
+    float shadowSigma = sqrt(max(shadowM2 - shadowM1 * shadowM1, 0.0));
+
+    // Clipping bounds in tonemapped space
+    float gamma = uniforms.varianceClipGamma;
+    vec3 clipMin = m1 - gamma * sigma;
+    vec3 clipMax = m1 + gamma * sigma;
+
+    // Clip history in tonemapped space
+    vec3 historyTM = tonemap(history);
+    vec3 clampedHistoryTM = clamp(historyTM, clipMin, clipMax);
+    vec3 clampedHistory = tonemapInverse(clampedHistoryTM);
+
+    // Shadow clipping (already LDR)
+    float clampedHistoryShadow = clamp(historyShadow,
+        shadowM1 - gamma * shadowSigma,
+        shadowM1 + gamma * shadowSigma);
+
+    // Measure how different history is from current neighborhood
+    float rejection = length(historyTM - clampedHistoryTM);
+
+    // Also measure how different history is from current frame directly
+    vec3 currentTM = tonemap(current);
+    float directDiff = length(historyTM - currentTM);
+
+    // Measure variance (high variance = noisy, need more accumulation)
+    float variance = length(sigma);
+
+    // Base blend factor
+    float alpha = uniforms.temporalBlend;
+
+    // For high-variance (noisy) areas, use LOWER alpha to accumulate more history
+    // This allows rough surfaces to converge over many frames
+    if (variance > 0.1) {
+        // Reduce alpha for noisy areas (accumulate more)
+        alpha = mix(alpha, 0.05, smoothstep(0.1, 0.4, variance));
+    }
+
+    // Increase alpha (use more current) when history was rejected (scene changed)
+    // Use the larger of rejection and direct difference to catch camera motion
+    float maxDiff = max(rejection, directDiff * 0.5);
+    if (maxDiff > 0.02) {
+        alpha = mix(alpha, 1.0, smoothstep(0.02, 0.2, maxDiff));
+    }
+
+    // Blend in linear space
+    vec3 result = mix(clampedHistory, current, alpha);
+    float resultShadow = mix(clampedHistoryShadow, currentShadow, alpha);
+
+    // Output
+    imageStore(outputReflections, pixelCoord, vec4(result, 1.0));
+    imageStore(outputShadows, pixelCoord, vec4(resultShadow));
+
+    // Update history
+    imageStore(historyReflections, pixelCoord, vec4(result, 1.0));
+    imageStore(historyShadows, pixelCoord, vec4(resultShadow));
+}

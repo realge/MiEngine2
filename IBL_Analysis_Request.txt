@@ -1,0 +1,60 @@
+Problem Summary
+===============
+
+In a Vulkan PBR renderer, the prefiltered environment map for IBL (Image-Based Lighting) is exhibiting incorrect behavior. Instead of producing properly blurred reflections at higher roughness values, the renderer shows multiple sharp reflections overlapping in different directions, creating a "ghosting" or "multiple reflection" artifact.
+
+Prompt for Claude Code Agent
+============================
+
+Context: I have a Vulkan-based PBR renderer implementing IBL with prefiltered environment maps. The prefiltering process should create increasingly blurred versions of the environment for different roughness levels, but instead I'm seeing sharp reflections duplicated/overlapping at different angles when roughness increases.
+
+Files to Analyze:
+-----------------
+
+TextureUtils.cpp - Contains IBL map generation functions including:
+- createPrefilterMap() - generates prefiltered environment map
+- readCubemapFromGPU() - reads cubemap data from GPU memory
+- CubemapData::sample() - samples cubemap data at given direction
+- createEnvironmentCubemap() - creates the source environment map
+
+pbr.frag - Fragment shader that samples the prefiltered map based on roughness
+
+Known Issues Identified:
+------------------------
+
+1. In createPrefilterMap(), when sampling the environment map, the code always uses mip level 0: envCubemapData->sample(L, 0)
+2. The readCubemapFromGPU() function only reads mip level 0 from the environment cubemap
+3. Possible edge bleeding in cubemap face selection logic
+4. Sample count and importance sampling weight calculations may need adjustment
+
+Required Analysis:
+------------------
+
+1. Trace the complete data flow from HDR environment map loading through prefilter generation to final shader sampling
+2. Identify all locations where mip levels are incorrectly handled or ignored
+3. Analyze the mathematical correctness of:
+   - The importance sampling implementation (GGX distribution)
+   - The sample weight calculations and PDF
+   - The roughness-to-mip-level mapping
+4. Check for synchronization issues between mip level generation and sampling
+5. Verify cubemap coordinate calculations for potential edge cases causing face selection errors
+
+Expected Solution:
+------------------
+
+Provide a comprehensive fix that:
+- Properly reads all mip levels from the environment cubemap into CubemapData
+- Correctly samples from appropriate mip levels based on roughness during prefilter generation
+- Fixes any mathematical errors in the importance sampling
+- Ensures proper mip level calculation in both CPU-side generation and GPU-side sampling
+- Includes defensive programming to prevent edge artifacts
+
+Deliverables:
+-------------
+
+1. Detailed analysis document explaining the root causes
+2. Complete corrected implementations of affected functions
+3. Explanation of what each change fixes and why
+4. Any additional recommendations for improving the IBL pipeline quality
+
+Please perform a deep analysis of the codebase to understand why increasing roughness produces overlapping sharp reflections instead of proper blurring, and provide a complete solution that addresses all identified issues.

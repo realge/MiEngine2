@@ -1,0 +1,89 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Height maps (ping-pong buffers)
+layout(set = 0, binding = 0, r32f) uniform readonly image2D currentHeightMap;
+layout(set = 0, binding = 1, r32f) uniform readonly image2D previousHeightMap;
+layout(set = 0, binding = 2, r32f) uniform writeonly image2D outputHeightMap;
+
+// Ripple injection buffer
+layout(set = 0, binding = 3) uniform RippleBuffer {
+    vec4 ripples[16];  // xy = position, z = strength, w = radius
+    int rippleCount;
+} rippleData;
+
+// Simulation parameters via push constants
+layout(push_constant) uniform SimulationParams {
+    float deltaTime;
+    float waveSpeed;
+    float damping;
+    int gridSize;
+} params;
+
+void main() {
+    ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    // Bounds check
+    if (texCoord.x >= params.gridSize || texCoord.y >= params.gridSize) {
+        return;
+    }
+
+    // Sample current and previous heights
+    float current = imageLoad(currentHeightMap, texCoord).r;
+    float previous = imageLoad(previousHeightMap, texCoord).r;
+
+    // Sample neighbors for Laplacian (discrete second derivative)
+    // Clamp coordinates to stay within bounds
+    ivec2 leftCoord = ivec2(max(texCoord.x - 1, 0), texCoord.y);
+    ivec2 rightCoord = ivec2(min(texCoord.x + 1, params.gridSize - 1), texCoord.y);
+    ivec2 upCoord = ivec2(texCoord.x, max(texCoord.y - 1, 0));
+    ivec2 downCoord = ivec2(texCoord.x, min(texCoord.y + 1, params.gridSize - 1));
+
+    float left = imageLoad(currentHeightMap, leftCoord).r;
+    float right = imageLoad(currentHeightMap, rightCoord).r;
+    float up = imageLoad(currentHeightMap, upCoord).r;
+    float down = imageLoad(currentHeightMap, downCoord).r;
+
+    // Wave equation: d2h/dt2 = c^2 * laplacian(h)
+    // Discrete form: h_new = 2*h_current - h_previous + c^2 * dt^2 * laplacian
+    // where laplacian = (left + right + up + down - 4*current)
+    float laplacian = left + right + up + down - 4.0 * current;
+
+    // Wave propagation factor - adjustable via waveSpeed parameter in debug panel
+    // c^2 * dt^2 should be < 0.5 for stability (CFL condition)
+    // waveSpeed acts as a direct multiplier (good range: 0.01 - 0.3)
+    float c2dt2 = params.waveSpeed;
+
+    // Standard wave equation update with velocity-based damping
+    // velocity = current - previous (implicit velocity from position difference)
+    // newHeight = current + damped_velocity + acceleration
+    // where acceleration = c2dt2 * laplacian
+    float velocity = current - previous;
+    float dampedVelocity = velocity * params.damping;
+    float acceleration = c2dt2 * laplacian;
+
+    float newHeight = current + dampedVelocity + acceleration;
+
+    // Inject ripples - add disturbance to height
+    vec2 uv = vec2(texCoord) / float(params.gridSize);
+    for (int i = 0; i < rippleData.rippleCount && i < 16; i++) {
+        vec2 ripplePos = rippleData.ripples[i].xy;
+        float strength = rippleData.ripples[i].z;
+        float radius = rippleData.ripples[i].w;
+
+        float dist = distance(uv, ripplePos);
+        if (dist < radius) {
+            // Smooth falloff from center
+            float falloff = 1.0 - (dist / radius);
+            falloff = falloff * falloff;  // Quadratic falloff for smoother ripples
+            newHeight += strength * falloff;
+        }
+    }
+
+    // Clamp to prevent numerical instability
+    newHeight = clamp(newHeight, -2.0, 2.0);
+
+    // Write output
+    imageStore(outputHeightMap, texCoord, vec4(newHeight, 0.0, 0.0, 0.0));
+}

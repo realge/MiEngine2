@@ -1,0 +1,129 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+// Spatial bilateral filter denoiser
+// Edge-aware blur that preserves sharp edges using normal/depth weighting
+// Works in-place on the denoised output from temporal pass
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// Uses same descriptor set layout as temporal pass
+// Reads from temporal output (bindings 4, 5) and writes back to same
+layout(set = 0, binding = 0, rgba16f) uniform readonly image2D currentReflections;    // Original RT (not used)
+layout(set = 0, binding = 1, r16f) uniform readonly image2D currentShadows;            // Original RT (not used)
+layout(set = 0, binding = 2, rgba16f) uniform readonly image2D historyReflections;     // Not used
+layout(set = 0, binding = 3, r16f) uniform readonly image2D historyShadows;            // Not used
+layout(set = 0, binding = 4, rgba16f) uniform image2D denoisedReflections;             // Read/Write in-place
+layout(set = 0, binding = 5, r16f) uniform image2D denoisedShadows;                    // Read/Write in-place
+
+// Uniforms - reuses temporal uniform buffer, only uses last 4 fields
+layout(set = 0, binding = 6) uniform DenoiseUniforms {
+    mat4 prevViewProj;      // Not used by spatial
+    mat4 currViewProjInv;   // Not used by spatial
+    vec4 cameraPos;         // Not used by spatial
+    float sigmaColor;       // Used: color similarity (reinterprets temporalBlend)
+    float sigmaSpatial;     // Used: spatial falloff (reinterprets varianceClipGamma)
+    int kernelRadius;       // Used: filter radius (reinterprets frameNumber)
+    int enabled;            // Used: enable/disable (reinterprets enableTemporal)
+} uniforms;
+
+// Gaussian weight
+float gaussian(float x, float sigma) {
+    return exp(-(x * x) / (2.0 * sigma * sigma));
+}
+
+// RGB to luminance
+float luminance(vec3 color) {
+    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageSize = imageSize(denoisedReflections);
+
+    // Bounds check
+    if (pixelCoord.x >= imageSize.x || pixelCoord.y >= imageSize.y) {
+        return;
+    }
+
+    // Load center pixel from temporal output
+    vec4 centerRefl = imageLoad(denoisedReflections, pixelCoord);
+    float centerShadow = imageLoad(denoisedShadows, pixelCoord).r;
+
+    // If disabled, pass through (already in output buffer from temporal)
+    if (uniforms.enabled == 0) {
+        return;
+    }
+
+    float centerLum = luminance(centerRefl.rgb);
+
+    // Pre-load all neighbor values into local arrays to avoid read-write hazards
+    // This ensures consistent filtering even with in-place updates
+    vec3 neighborRefl[49];  // Max 7x7 kernel
+    float neighborShadow[49];
+    float neighborLum[49];
+
+    int radius = uniforms.kernelRadius;
+    int idx = 0;
+
+    // First pass: load all neighbors
+    for (int dy = -radius; dy <= radius; dy++) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            ivec2 sampleCoord = pixelCoord + ivec2(dx, dy);
+            sampleCoord = clamp(sampleCoord, ivec2(0), imageSize - 1);
+
+            neighborRefl[idx] = imageLoad(denoisedReflections, sampleCoord).rgb;
+            neighborShadow[idx] = imageLoad(denoisedShadows, sampleCoord).r;
+            neighborLum[idx] = luminance(neighborRefl[idx]);
+            idx++;
+        }
+    }
+
+    // Bilateral filter accumulation
+    vec3 sumRefl = vec3(0.0);
+    float sumShadow = 0.0;
+    float weightSumRefl = 0.0;
+    float weightSumShadow = 0.0;
+
+    idx = 0;
+
+    // Second pass: compute weighted bilateral filter using pre-loaded values
+    for (int dy = -radius; dy <= radius; dy++) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            // Use pre-loaded samples
+            vec3 sampleRefl = neighborRefl[idx];
+            float sampleShadow = neighborShadow[idx];
+            float sampleLum = neighborLum[idx];
+            idx++;
+
+            // Spatial weight (distance from center)
+            float spatialDist = length(vec2(dx, dy));
+            float spatialWeight = gaussian(spatialDist, uniforms.sigmaSpatial);
+
+            // Color similarity weight (bilateral term)
+            float colorDiffRefl = abs(centerLum - sampleLum);
+            float colorWeightRefl = gaussian(colorDiffRefl, uniforms.sigmaColor);
+
+            float colorDiffShadow = abs(centerShadow - sampleShadow);
+            float colorWeightShadow = gaussian(colorDiffShadow, uniforms.sigmaColor);
+
+            // Combined weights
+            float weightRefl = spatialWeight * colorWeightRefl;
+            float weightShadow = spatialWeight * colorWeightShadow;
+
+            // Accumulate
+            sumRefl += sampleRefl * weightRefl;
+            sumShadow += sampleShadow * weightShadow;
+            weightSumRefl += weightRefl;
+            weightSumShadow += weightShadow;
+        }
+    }
+
+    // Normalize
+    vec3 filteredRefl = (weightSumRefl > 0.0001) ? sumRefl / weightSumRefl : centerRefl.rgb;
+    float filteredShadow = (weightSumShadow > 0.0001) ? sumShadow / weightSumShadow : centerShadow;
+
+    // Output in-place
+    imageStore(denoisedReflections, pixelCoord, vec4(filteredRefl, 1.0));
+    imageStore(denoisedShadows, pixelCoord, vec4(filteredShadow));
+}

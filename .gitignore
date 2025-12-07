@@ -1,0 +1,69 @@
+# Build outputs
+x64/
+build/
+out/
+Debug/
+Release/
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.obj
+*.o
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.VC.opendb
+ipch/
+~AutoRecover.*
+
+# JetBrains IDE
+.idea/
+
+# Cache and generated files
+cache/
+*.spv
+
+# Debug/temporary files
+*.ppm
+*.log
+imgui.ini
+
+# HDR environment maps (large binary files)
+hdr/*.hdr
+
+# Model files (large binary files) - uncomment if you want to exclude
+# models/*.fbx
+# models/*.obj
+
+# Texture files (large binary files) - uncomment if you want to exclude
+# texture/*.png
+# texture/*.jpg
+# texture/*.tga
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary/backup files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Claude Code
+.claude/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
