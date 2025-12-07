@@ -2,8 +2,8 @@
 x64/
 build/
 out/
-Debug/
-Release/
+/Debug/
+/Release/
 *.exe
 *.dll
 *.lib

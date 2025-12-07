@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 realge
+Copyright (c) 2025 MiEngine2 Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,35 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================================
+THIRD-PARTY NOTICES
+================================================================================
+
+This software uses the following third-party libraries:
+
+1. Autodesk FBX SDK
+   This software contains Autodesk(R) FBX(R) code developed by Autodesk, Inc.
+   Copyright 2008-2025 Autodesk, Inc. All rights reserved.
+   Such code is provided "as is" and Autodesk, Inc. disclaims any and all
+   warranties, whether express or implied, including without limitation the
+   implied warranties of merchantability, fitness for a particular purpose
+   or non-infringement of third party rights.
+
+   Note: FBX SDK is free but must be downloaded separately from Autodesk.
+   Visit: https://aps.autodesk.com/developer/overview/fbx-sdk
+
+2. Dear ImGui - MIT License
+   Copyright (c) 2014-2025 Omar Cornut
+
+3. GLM (OpenGL Mathematics) - MIT License
+   Copyright (c) 2005-2025 G-Truc Creation
+
+4. GLFW - zlib/libpng License
+   Copyright (c) 2002-2025 Marcus Geelnard and Camilla Löwy
+
+5. Vulkan SDK - Apache 2.0 / MIT / BSD Licenses
+   Copyright (c) 2015-2025 The Khronos Group Inc.
+
+6. METIS (Optional) - Apache 2.0 License
+   Copyright (c) 1995-2025 Regents of the University of Minnesota

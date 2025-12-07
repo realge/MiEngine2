@@ -18,6 +18,7 @@
 #include "include/debug/ScenePanel.h"
 #include "include/debug/ActorSpawnerPanel.h"
 #include "include/debug/RayTracingDebugPanel.h"
+#include "include/debug/VirtualGeoDebugPanel.h"
 #include "include/asset/AssetBrowserWindow.h"
 
 
@@ -2634,25 +2635,38 @@ void VulkanRenderer::createUniformBuffers() {
 }
 
 void VulkanRenderer::createDescriptorPool() {
-    std::array<VkDescriptorPoolSize, 4> poolSizes{};
+    // Pool sizes expanded for Virtual Geometry system support
+    std::array<VkDescriptorPoolSize, 6> poolSizes{};
 
     // MVP Uniform buffer pool size & Light Uniform buffer pool size + Point Light Shadow Info + Bone Matrix UBOs
-    // Add 50 skeletal instances * MAX_FRAMES_IN_FLIGHT for bone matrices
     uint32_t maxSkeletalInstances = 50;
+    uint32_t maxVGeoDescriptorSets = 100;  // For Virtual Geometry culling, LOD, indirect draw
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 5 + maxSkeletalInstances * MAX_FRAMES_IN_FLIGHT);
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(
+        MAX_FRAMES_IN_FLIGHT * 5 +
+        maxSkeletalInstances * MAX_FRAMES_IN_FLIGHT +
+        maxVGeoDescriptorSets * MAX_FRAMES_IN_FLIGHT  // Virtual Geo uniform buffers
+    );
 
-    // Material Texture sampler pool sizes
+    // Material Texture sampler pool sizes (increased for Virtual Geo material atlases)
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 5 * 20); // Max 20 materials * 5 textures per material * frames
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 5 * 100); // Up to 100 materials
 
     // IBL Texture sampler pool sizes + Shadow Maps (directional + point light cubemap)
     poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 8); // IBL textures + shadow maps
+    poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 16); // Expanded for Hi-Z, visibility buffer
 
-    // Skybox Texture sampler pool size + Dummy RT output samplers (2 per frame)
+    // Skybox Texture sampler pool size + Dummy RT output samplers
     poolSizes[3].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[3].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 4);  // Skybox + 2 RT outputs per frame
+    poolSizes[3].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 8);
+
+    // Storage buffers for Virtual Geo (cluster data, indirect commands, visibility)
+    poolSizes[4].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    poolSizes[4].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 20);  // Geometry pool, indirect, cluster info
+
+    // Storage images for compute shaders (Hi-Z, visibility buffer writes)
+    poolSizes[5].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    poolSizes[5].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 8);
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -2660,14 +2674,15 @@ void VulkanRenderer::createDescriptorPool() {
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
 
-    // Adjust maxSets calculation to include point light shadow descriptor sets, skeletal bone matrix sets, and dummy RT sets
-    uint32_t maxMaterialSets = 100;
-    uint32_t maxTempSetsPerFrame = 2;
-    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 6) // MVP, Lights, IBL, Shadow, DummyRT per frame
+    // Expanded maxSets for Virtual Geo system
+    uint32_t maxMaterialSets = 500;         // Increased from 100
+    uint32_t maxTempSetsPerFrame = 10;      // Increased from 2
+    uint32_t maxVGeoSets = 50;              // Culling, LOD, indirect draw sets
+    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 6)
                       + maxMaterialSets
                       + (MAX_FRAMES_IN_FLIGHT * maxTempSetsPerFrame)
-                      + (maxSkeletalInstances * MAX_FRAMES_IN_FLIGHT);  // Bone matrix descriptor sets
-
+                      + (maxSkeletalInstances * MAX_FRAMES_IN_FLIGHT)
+                      + (maxVGeoSets * MAX_FRAMES_IN_FLIGHT);  // ~720 total sets
 
     if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor pool!");
@@ -3061,6 +3076,7 @@ void VulkanRenderer::initializeDebugUI() {
     auto sceneManagerPanel = std::make_shared<ScenePanel>(this);
     auto actorSpawnerPanel = std::make_shared<ActorSpawnerPanel>(this);
     auto rayTracingPanel = std::make_shared<RayTracingDebugPanel>(this);
+    auto virtualGeoPanel = std::make_shared<MiEngine::VirtualGeoDebugPanel>();
 
     debugUI->addPanel(cameraPanel);
     debugUI->addPanel(renderPanel);
@@ -3072,6 +3088,7 @@ void VulkanRenderer::initializeDebugUI() {
     debugUI->addPanel(sceneManagerPanel);
     debugUI->addPanel(actorSpawnerPanel);
     debugUI->addPanel(rayTracingPanel);
+    debugUI->addPanel(virtualGeoPanel);
 
     // Start with camera, performance, render, and material panels open
     // Scene hierarchy and settings start closed
@@ -3081,6 +3098,7 @@ void VulkanRenderer::initializeDebugUI() {
     materialPanel->setOpen(true);
     waterPanel->setOpen(true);
     rayTracingPanel->setOpen(false); // RT panel starts closed by default
+    virtualGeoPanel->setOpen(false); // Virtual Geometry panel starts closed by default
     
     std::cout << "Debug UI system initialized with panels" << std::endl;
 

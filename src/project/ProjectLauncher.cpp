@@ -591,11 +591,12 @@ void ProjectLauncher::drawLauncherUI() {
         "7. Draw Call Test",
         "8. Physics Test",
         "9. Skeletal Animation",
-        "10. Ray Tracing Test"
+        "10. Ray Tracing Test",
+        "11. Virtual Geo Test"
     };
     int currentMode = m_SelectedGameMode - 1; // Convert to 0-based index
     if (currentMode < 0) currentMode = 1; // Default to Editor
-    if (currentMode > 9) currentMode = 9;
+    if (currentMode > 10) currentMode = 10;
 
     ImGui::SetNextItemWidth(-1);
     if (ImGui::Combo("##gamemode", &currentMode, gameModes, IM_ARRAYSIZE(gameModes))) {

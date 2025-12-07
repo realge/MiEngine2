@@ -11,6 +11,7 @@
 #include "Games/PhysicsTest/PhysicsTestGame.h"
 #include "Games/SkeletalAnimationTest/SkeletalAnimationTestGame.h"
 #include "Games/RayTracingTest/RayTracingTestGame.h"
+#include "Games/VirtualGeoTest/VirtualGeoTestGame.h"
 #include <iostream>
 #include <limits>
 #include <stdlib.h>
@@ -51,6 +52,7 @@ LaunchArgs parseArgs(int argc, char* argv[]) {
             std::cout << "  8. Physics Test\n";
             std::cout << "  9. Skeletal Animation Test\n";
             std::cout << "  10. Ray Tracing Test (RTX)\n";
+            std::cout << "  11. Virtual Geo Test (Clustering)\n";
             exit(0);
         }
     }
@@ -69,7 +71,8 @@ int selectGameMode() {
     std::cout << "8. Physics Test (Gravity & Impulse)\n";
     std::cout << "9. Skeletal Animation Test\n";
     std::cout << "10. Ray Tracing Test (RTX)\n";
-    std::cout << "Enter choice (1-10): ";
+    std::cout << "11. Virtual Geo Test (Clustering)\n";
+    std::cout << "Enter choice (1-11): ";
 
     int choice;
     if (!(std::cin >> choice)) {
@@ -92,6 +95,7 @@ std::unique_ptr<Game> createGame(int choice) {
         case 8: return std::make_unique<PhysicsTestGame>();
         case 9: return std::make_unique<SkeletalAnimationTestGame>();
         case 10: return std::make_unique<RayTracingTestGame>();
+        case 11: return std::make_unique<VirtualGeoTestGame>();
         default: return std::make_unique<EditorGame>();
     }
 }

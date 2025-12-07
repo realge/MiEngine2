@@ -1,0 +1,108 @@
+#version 460
+
+// Frustum culling compute shader
+// Processes bounding volumes and outputs visible object indices
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Uniforms
+layout(set = 0, binding = 0) uniform CullUniforms {
+    mat4 viewProj;
+    vec4 frustumPlanes[6];  // xyz = normal, w = distance
+    vec4 cameraPosition;    // xyz = position, w = unused
+    uint objectCount;
+    uint enableFrustumCull;
+    uint enableDistanceCull;
+    float maxDrawDistance;
+} uniforms;
+
+// Input: bounding volumes for each object
+struct CullInputData {
+    vec4 sphereCenterRadius;  // xyz = center, w = radius
+    vec4 aabbMin;             // xyz = min, w = unused
+    vec4 aabbMax;             // xyz = max, w = unused
+    uint objectIndex;         // Original object index
+    uint padding[3];
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer InputBuffer {
+    CullInputData inputs[];
+};
+
+// Output: visible object indices and count
+layout(std430, set = 0, binding = 2) buffer OutputBuffer {
+    uint visibleCount;
+    uint visibleIndices[];
+};
+
+// Test sphere against frustum planes
+bool frustumTestSphere(vec3 center, float radius) {
+    for (int i = 0; i < 6; i++) {
+        vec3 normal = uniforms.frustumPlanes[i].xyz;
+        float distance = uniforms.frustumPlanes[i].w;
+
+        float d = dot(normal, center) + distance;
+        if (d < -radius) {
+            return false;  // Outside this plane
+        }
+    }
+    return true;  // Inside or intersecting all planes
+}
+
+// Test AABB against frustum planes
+bool frustumTestAABB(vec3 minBounds, vec3 maxBounds) {
+    for (int i = 0; i < 6; i++) {
+        vec3 normal = uniforms.frustumPlanes[i].xyz;
+        float distance = uniforms.frustumPlanes[i].w;
+
+        // Find the corner most aligned with the plane normal
+        vec3 pVertex;
+        pVertex.x = (normal.x >= 0.0) ? maxBounds.x : minBounds.x;
+        pVertex.y = (normal.y >= 0.0) ? maxBounds.y : minBounds.y;
+        pVertex.z = (normal.z >= 0.0) ? maxBounds.z : minBounds.z;
+
+        // If this corner is outside, the whole AABB is outside
+        if (dot(normal, pVertex) + distance < 0.0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void main() {
+    uint globalId = gl_GlobalInvocationID.x;
+
+    if (globalId >= uniforms.objectCount) {
+        return;
+    }
+
+    CullInputData cullData = inputs[globalId];
+
+    vec3 sphereCenter = cullData.sphereCenterRadius.xyz;
+    float sphereRadius = cullData.sphereCenterRadius.w;
+
+    bool visible = true;
+
+    // Distance culling (optional)
+    if (uniforms.enableDistanceCull != 0) {
+        float distance = length(sphereCenter - uniforms.cameraPosition.xyz);
+        if (distance - sphereRadius > uniforms.maxDrawDistance) {
+            visible = false;
+        }
+    }
+
+    // Frustum culling
+    if (visible && uniforms.enableFrustumCull != 0) {
+        // Use sphere test first (faster)
+        if (!frustumTestSphere(sphereCenter, sphereRadius)) {
+            visible = false;
+        }
+        // Could add AABB test for more precision if needed
+    }
+
+    // If visible, add to output list
+    if (visible) {
+        uint index = atomicAdd(visibleCount, 1);
+        visibleIndices[index] = cullData.objectIndex;
+    }
+}

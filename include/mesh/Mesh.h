@@ -54,6 +54,14 @@ public:
     // Get the bounding box for picking
     const AABB& getBoundingBox() const { return boundingBox; }
 
+    // Get vertex/index data for clustering (before GPU upload clears them)
+    const std::vector<Vertex>& getVertexData() const { return vertices; }
+    const std::vector<unsigned int>& getIndexData() const { return indices; }
+
+    // Get mesh name (for ClusteredMesh)
+    const std::string& getName() const { return name; }
+    void setName(const std::string& n) { name = n; }
+
     uint32_t indexCount;
     uint32_t vertexCount = 0;
 
@@ -84,6 +92,9 @@ protected:
                     VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
 private:
+    // Mesh name for identification
+    std::string name;
+
     // Local copies of the mesh data
     std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;

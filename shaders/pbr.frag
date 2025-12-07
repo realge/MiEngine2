@@ -479,6 +479,12 @@ void main() {
         } else {
             color = vec3(0.5); // Gray = RT shadows disabled
         }
+    } else if (pushConstants.debugLayer == 16) {
+        // Layer 16: Vertex color visualization (for Virtual Geo cluster debug)
+        color = fragColor;
+    } else if (pushConstants.debugLayer == 17) {
+        // Layer 17: Albedo only (after vertex color multiplication)
+        color = albedo.rgb;
     } else {
         // Layer 0 or default: Complete PBR (all layers)
         color = ambient + Lo + emissive;

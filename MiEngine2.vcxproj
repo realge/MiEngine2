@@ -192,11 +192,13 @@
     <ClCompile Include="src\core\MiTransform.cpp" />
     <ClCompile Include="src\core\MiTypeRegistry.cpp" />
     <ClCompile Include="src\core\MiWorld.cpp" />
+    <ClCompile Include="src\culling\FrustumCulling.cpp" />
     <ClCompile Include="src\debug\ActorSpawnerPanel.cpp" />
     <ClCompile Include="src\debug\CameraDebugPanel.cpp" />
     <ClCompile Include="src\debug\DebugPanel.cpp" />
     <ClCompile Include="src\debug\DebugUIManager.cpp" />
     <ClCompile Include="src\debug\MaterialDebugPanel.cpp" />
+    <ClCompile Include="src\debug\VirtualGeoDebugPanel.cpp" />
     <ClCompile Include="src\debug\PerformancePanel.cpp" />
     <ClCompile Include="src\debug\RayTracingDebugPanel.cpp" />
     <ClCompile Include="src\debug\RenderDebugPanel.cpp" />
@@ -209,6 +211,8 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\mesh\Mesh.cpp" />
     <ClCompile Include="src\mesh\SkeletalMesh.cpp" />
+    <ClCompile Include="src\virtualgeo\ClusterDAGBuilder.cpp" />
+    <ClCompile Include="src\virtualgeo\MeshClusterer.cpp" />
     <ClCompile Include="src\physics\ColliderComponent.cpp" />
     <ClCompile Include="src\physics\PhysicsWorld.cpp" />
     <ClCompile Include="src\physics\RigidBodyComponent.cpp" />
@@ -255,11 +259,13 @@
     <ClInclude Include="include\core\MiTransform.h" />
     <ClInclude Include="include\core\MiTypeRegistry.h" />
     <ClInclude Include="include\core\MiWorld.h" />
+    <ClInclude Include="include\culling\FrustumCulling.h" />
     <ClInclude Include="include\debug\ActorSpawnerPanel.h" />
     <ClInclude Include="include\debug\CameraDebugPanel.h" />
     <ClInclude Include="include\debug\DebugPanel.h" />
     <ClInclude Include="include\debug\DebugUIManager.h" />
     <ClInclude Include="include\debug\MaterialDebugPanel.h" />
+    <ClInclude Include="include\debug\VirtualGeoDebugPanel.h" />
     <ClInclude Include="include\debug\PerformancePanel.h" />
     <ClInclude Include="include\debug\RayTracingDebugPanel.h" />
     <ClInclude Include="include\debug\RenderDebugPanel.h" />
@@ -270,6 +276,9 @@
     <ClInclude Include="include\material\Material.h" />
     <ClInclude Include="include\mesh\Mesh.h" />
     <ClInclude Include="include\mesh\SkeletalMesh.h" />
+    <ClInclude Include="include\virtualgeo\ClusterDAGBuilder.h" />
+    <ClInclude Include="include\virtualgeo\MeshClusterer.h" />
+    <ClInclude Include="include\virtualgeo\VirtualGeoTypes.h" />
     <ClInclude Include="include\physics\ColliderComponent.h" />
     <ClInclude Include="include\physics\Component.h" />
     <ClInclude Include="include\physics\PhysicsWorld.h" />
