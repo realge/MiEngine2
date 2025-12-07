@@ -62,6 +62,11 @@ desktop.ini
 # Claude Code
 .claude/
 
+# Documentation/notes (except docs folder)
+/*.md
+/*.txt
+!README.md
+
 # CMake
 CMakeCache.txt
 CMakeFiles/
