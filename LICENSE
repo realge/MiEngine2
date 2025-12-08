@@ -49,5 +49,5 @@ This software uses the following third-party libraries:
 5. Vulkan SDK - Apache 2.0 / MIT / BSD Licenses
    Copyright (c) 2015-2025 The Khronos Group Inc.
 
-6. METIS (Optional) - Apache 2.0 License
+6. METIS - Apache 2.0 License
    Copyright (c) 1995-2025 Regents of the University of Minnesota
