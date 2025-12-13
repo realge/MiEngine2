@@ -1,0 +1,322 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+// ============================================================================
+// Cluster Culling Compute Shader
+//
+// Performs frustum culling and LOD selection for virtual geometry clusters.
+// Outputs visible clusters to indirect draw buffer.
+// ============================================================================
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Extended cluster data (input) - must match GPUClusterDataExt in VirtualGeoRenderer.h
+struct ClusterDataExt {
+    vec4 boundingSphere;    // xyz = center, w = radius
+    vec4 aabbMin;           // xyz = min, w = lodError
+    vec4 aabbMax;           // xyz = max, w = parentError
+    uint vertexOffset;      // Global vertex offset into merged buffer
+    uint vertexCount;
+    uint globalIndexOffset; // Global index offset into merged buffer
+    uint triangleCount;
+    uint lodLevel;
+    uint materialIndex;
+    uint flags;
+    uint instanceId;        // Set per-instance during culling
+};
+
+// Indirect draw command (output)
+struct DrawCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int  vertexOffset;
+    uint firstInstance;
+};
+
+// Instance data
+struct InstanceData {
+    mat4 modelMatrix;
+    mat4 normalMatrix;
+    uint clusterOffset;
+    uint clusterCount;
+    uint meshId;
+    uint pad;
+};
+
+// Uniforms - must match GPUCullingUniforms in VirtualGeoRenderer.h
+layout(set = 0, binding = 0) uniform CullingUniforms {
+    mat4 viewProjection;
+    mat4 view;
+    vec4 frustumPlanes[6];
+    vec4 cameraPosition;
+    vec4 screenParams;      // x = width, y = height, z = near, w = far
+    float lodBias;
+    float errorThreshold;
+    uint totalClusters;
+    uint frameIndex;
+    uint forcedLodLevel;    // If useForcedLod == 1, only render clusters at this LOD
+    uint useForcedLod;      // 1 = use forced LOD, 0 = auto LOD selection
+    uint enableFrustumCulling;  // 1 = enable frustum culling, 0 = disable
+    uint enableOcclusionCulling;// 1 = enable Hi-Z occlusion culling, 0 = disable
+    // Hi-Z occlusion parameters (adjustable via debug panel)
+    float hizMaxMipLevel;   // Maximum mip level to sample (lower = more accurate)
+    float hizDepthBias;     // Bias added to Hi-Z depth for comparison
+    float hizDepthThreshold;// Depth threshold for "no occluder" detection
+    float hizPadding;       // Padding for alignment
+} ubo;
+
+// Hi-Z pyramid sampler for occlusion culling
+layout(set = 0, binding = 6) uniform sampler2D hizPyramid;
+
+// Input buffers
+layout(std430, set = 0, binding = 1) readonly buffer ClusterBuffer {
+    ClusterDataExt clusters[];
+};
+
+layout(std430, set = 0, binding = 2) readonly buffer InstanceBuffer {
+    InstanceData instances[];
+};
+
+// Output buffers
+layout(std430, set = 0, binding = 3) buffer DrawCommandBuffer {
+    DrawCommand drawCommands[];
+};
+
+layout(std430, set = 0, binding = 4) buffer DrawCountBuffer {
+    uint drawCount;
+};
+
+layout(std430, set = 0, binding = 5) buffer VisibleClusterBuffer {
+    uint visibleClusters[];
+};
+
+// Push constants for per-dispatch data
+layout(push_constant) uniform PushConstants {
+    uint instanceIndex;
+    uint clusterStartIndex;
+    uint clusterCount;
+    uint maxLodLevel;       // Maximum LOD level for this mesh (for clamping)
+} push;
+
+// ============================================================================
+// Culling Functions
+// ============================================================================
+
+// Test sphere against frustum planes
+bool frustumCullSphere(vec3 center, float radius) {
+    for (int i = 0; i < 6; i++) {
+        float distance = dot(ubo.frustumPlanes[i].xyz, center) + ubo.frustumPlanes[i].w;
+        if (distance < -radius) {
+            return true;  // Outside frustum
+        }
+    }
+    return false;  // Inside or intersecting
+}
+
+// Test AABB against frustum planes
+bool frustumCullAABB(vec3 aabbMin, vec3 aabbMax) {
+    for (int i = 0; i < 6; i++) {
+        vec3 normal = ubo.frustumPlanes[i].xyz;
+
+        // Find the positive vertex (furthest along plane normal)
+        vec3 pVertex = vec3(
+            normal.x >= 0 ? aabbMax.x : aabbMin.x,
+            normal.y >= 0 ? aabbMax.y : aabbMin.y,
+            normal.z >= 0 ? aabbMax.z : aabbMin.z
+        );
+
+        float distance = dot(normal, pVertex) + ubo.frustumPlanes[i].w;
+        if (distance < 0) {
+            return true;  // Outside frustum
+        }
+    }
+    return false;  // Inside or intersecting
+}
+
+// Calculate screen-space error for LOD selection
+float calculateScreenSpaceError(vec3 center, float worldError) {
+    // Distance from camera to cluster center
+    float distance = length(center - ubo.cameraPosition.xyz);
+    distance = max(distance, 0.001);  // Prevent division by zero
+
+    // Project error to screen space
+    // screenError = worldError * screenHeight / (2 * distance * tan(fov/2))
+    // Simplified: screenError = worldError * projectionFactor / distance
+    float projectionFactor = ubo.screenParams.y * 0.5;  // Approximate
+    float screenError = worldError * projectionFactor / distance;
+
+    return screenError * ubo.lodBias;
+}
+
+// Hi-Z occlusion test
+// Returns true if the sphere is fully occluded (should be culled)
+bool occlusionCullSphere(vec3 worldCenter, float worldRadius) {
+    // Project sphere center to clip space
+    vec4 clipCenter = ubo.viewProjection * vec4(worldCenter, 1.0);
+
+    // Check if sphere is behind camera
+    if (clipCenter.w <= 0.0) {
+        return false;  // Behind camera - don't cull
+    }
+
+    // Project to NDC
+    vec3 ndc = clipCenter.xyz / clipCenter.w;
+
+    // Check if center is outside NDC bounds (with margin for sphere extent)
+    if (abs(ndc.x) > 1.3 || abs(ndc.y) > 1.3) {
+        return false;  // Outside screen - let frustum culling handle it
+    }
+
+    // Get view-space distance
+    float viewZ = clipCenter.w;
+
+    // Project sphere radius to screen space (in pixels)
+    float pixelRadius = worldRadius * ubo.screenParams.y * 0.5 / viewZ;
+    float pixelDiameter = pixelRadius * 2.0;
+
+    // Convert NDC to UV coordinates (0-1 range)
+    vec2 screenUV = ndc.xy * 0.5 + 0.5;
+
+    // Skip if center is outside valid UV range
+    if (screenUV.x < 0.01 || screenUV.x > 0.99 ||
+        screenUV.y < 0.01 || screenUV.y > 0.99) {
+        return false;
+    }
+
+    // Calculate mip level based on sphere's screen-space diameter
+    // Use coarser mip level (+2) for more aggressive culling
+    // The Hi-Z pyramid stores MAX depth, so coarser level = larger coverage area
+    float mipLevel = clamp(log2(max(pixelDiameter, 1.0)) + 2.0, 0.0, ubo.hizMaxMipLevel);
+
+    // Sample Hi-Z at center only - the mip level already covers the sphere's area
+    // because Hi-Z uses max reduction (each texel = max of 2x2 children)
+    float hizDepth = textureLod(hizPyramid, screenUV, mipLevel).r;
+
+    // Check if Hi-Z shows far plane (no occluder) - skip occlusion test
+    if (hizDepth > ubo.hizDepthThreshold) {
+        return false;
+    }
+
+    // Project the FRONT of the sphere to get accurate depth
+    // Use 1.5x radius margin to prevent self-occlusion (bounding sphere isn't tight)
+    vec3 viewDir = normalize(worldCenter - ubo.cameraPosition.xyz);
+    vec3 sphereFront = worldCenter - viewDir * worldRadius * 1.5;
+    vec4 frontClip = ubo.viewProjection * vec4(sphereFront, 1.0);
+
+    // Check if front is behind camera
+    if (frontClip.w <= 0.0) {
+        return false;
+    }
+
+    // Get NDC depth of sphere front
+    float sphereNearZ = frontClip.z / frontClip.w;
+    sphereNearZ = clamp(sphereNearZ, 0.0, 1.0);
+
+    // Occlusion test: if sphere's front is further than Hi-Z depth,
+    // the sphere is fully behind visible geometry and can be culled.
+    // The 1.5x margin above + bias provides conservative culling
+    return sphereNearZ > (hizDepth + ubo.hizDepthBias);
+}
+
+// Check if cluster should be rendered based on LOD
+// Uses INSTANCE center for LOD selection - ensures complete coverage (no gaps)
+// All clusters in an instance use the same LOD level
+bool shouldRenderCluster(ClusterDataExt cluster, vec3 instanceCenter) {
+    uint lodLevel = cluster.lodLevel;
+
+    // Forced LOD mode: only render clusters at the specified LOD level
+    if (ubo.useForcedLod != 0) {
+        uint clampedForcedLod = min(ubo.forcedLodLevel, push.maxLodLevel);
+        return lodLevel == clampedForcedLod;
+    }
+
+    // =========================================================================
+    // Instance-based LOD selection
+    // All clusters use the same LOD based on instance center distance
+    // This prevents gaps that occur with per-cluster LOD selection
+    // =========================================================================
+    float distance = length(instanceCenter - ubo.cameraPosition.xyz);
+
+    // Calculate desired LOD level based on instance distance
+    // lodBias: higher = switch to coarser LOD sooner
+    // errorThreshold * 10: base distance where LOD 0 transitions to LOD 1
+    float lodTransitionBase = ubo.errorThreshold * 10.0;
+    float desiredLodFloat = log2(max(distance / lodTransitionBase, 1.0)) * ubo.lodBias;
+
+    // Clamp to mesh's actual max LOD level
+    uint desiredLod = uint(clamp(desiredLodFloat, 0.0, float(push.maxLodLevel)));
+
+    return lodLevel == desiredLod;
+}
+
+// ============================================================================
+// Main
+// ============================================================================
+
+void main() {
+    uint globalIdx = gl_GlobalInvocationID.x;
+
+    // Check bounds
+    if (globalIdx >= push.clusterCount) {
+        return;
+    }
+
+    uint clusterIdx = push.clusterStartIndex + globalIdx;
+    ClusterDataExt cluster = clusters[clusterIdx];
+
+    // Get instance transform
+    InstanceData instance = instances[push.instanceIndex];
+
+    // Get instance center (translation from model matrix) for LOD selection
+    vec3 instanceCenter = vec3(instance.modelMatrix[3]);
+
+    // Transform cluster bounds to world space
+    vec3 localCenter = cluster.boundingSphere.xyz;
+    float radius = cluster.boundingSphere.w;
+
+    // Transform center to world space (for frustum culling)
+    vec4 worldCenter4 = instance.modelMatrix * vec4(localCenter, 1.0);
+    vec3 worldCenter = worldCenter4.xyz;
+
+    // Scale radius by max scale factor
+    vec3 scale = vec3(
+        length(instance.modelMatrix[0].xyz),
+        length(instance.modelMatrix[1].xyz),
+        length(instance.modelMatrix[2].xyz)
+    );
+    float maxScale = max(max(scale.x, scale.y), scale.z);
+    float worldRadius = radius * maxScale;
+
+    // Frustum culling (per-cluster, can be disabled via debug panel)
+    if (ubo.enableFrustumCulling != 0) {
+        if (frustumCullSphere(worldCenter, worldRadius)) {
+            return;  // Culled
+        }
+    }
+
+    // Hi-Z occlusion culling (after frustum, before LOD selection)
+    if (ubo.enableOcclusionCulling != 0) {
+        if (occlusionCullSphere(worldCenter, worldRadius)) {
+            return;  // Occluded
+        }
+    }
+
+    // LOD selection (instance-based for complete coverage)
+    if (!shouldRenderCluster(cluster, instanceCenter)) {
+        return;  // Wrong LOD level
+    }
+
+    // Cluster is visible - add to draw buffer
+    uint drawIdx = atomicAdd(drawCount, 1);
+
+    // Write draw command using GLOBAL offsets into merged buffers
+    drawCommands[drawIdx].indexCount = cluster.triangleCount * 3;
+    drawCommands[drawIdx].instanceCount = 1;
+    drawCommands[drawIdx].firstIndex = cluster.globalIndexOffset;  // Global index offset
+    drawCommands[drawIdx].vertexOffset = 0;  // Vertices already have global offsets in index buffer
+    drawCommands[drawIdx].firstInstance = push.instanceIndex;
+
+    // Store visible cluster index for debugging/visualization
+    visibleClusters[drawIdx] = clusterIdx;
+}

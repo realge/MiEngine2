@@ -8,10 +8,11 @@ namespace MiEngine {
 
 struct ClusteredMesh;
 struct ClusteringStats;
+class VirtualGeoRenderer;
 
 class VirtualGeoDebugPanel : public DebugPanel {
 public:
-    VirtualGeoDebugPanel();
+    VirtualGeoDebugPanel(VulkanRenderer* renderer);
     virtual ~VirtualGeoDebugPanel() = default;
 
     void draw() override;
@@ -21,6 +22,9 @@ public:
 
     // Set clustering stats
     void setClusteringStats(const ClusteringStats& stats) { m_Stats = stats; }
+
+    // Set VirtualGeoRenderer for runtime controls
+    void setVirtualGeoRenderer(VirtualGeoRenderer* vgRenderer) { m_VGRenderer = vgRenderer; }
 
     // Visualization options
     bool isClusterVisualizationEnabled() const { return m_ShowClusterColors; }
@@ -36,9 +40,11 @@ private:
     void renderLODSelector();
     void renderVisualizationOptions();
     void renderStats();
+    void renderRendererControls();
 
     ClusteredMesh* m_ClusteredMesh = nullptr;
     ClusteringStats m_Stats{};
+    VirtualGeoRenderer* m_VGRenderer = nullptr;
 
     // Visualization settings
     bool m_ShowClusterColors = true;

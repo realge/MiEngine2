@@ -69,6 +69,13 @@ private:
                        uint32_t targetLevel,
                        const ClusteringOptions& options);
 
+    // Build LOD level directly from LOD 0 with specified reduction
+    bool buildLODLevelFromBase(ClusteredMesh& mesh,
+                                const std::vector<uint32_t>& baseClusters,
+                                uint32_t targetLevel,
+                                float reductionRatio,
+                                const ClusteringOptions& options);
+
     // Simplify a group of clusters into coarser clusters
     void simplifyClusterGroup(const std::vector<uint32_t>& sourceClusterIndices,
                               const ClusteredMesh& mesh,
@@ -76,9 +83,21 @@ private:
                               std::vector<uint32_t>& outIndices,
                               float targetReduction);
 
-    // Merge adjacent clusters for LOD
+    // Simplify with specific reduction ratio
+    void simplifyClusterGroupWithRatio(const std::vector<uint32_t>& sourceClusterIndices,
+                                        const ClusteredMesh& mesh,
+                                        std::vector<ClusterVertex>& outVertices,
+                                        std::vector<uint32_t>& outIndices,
+                                        float reductionRatio);
+
+    // Merge adjacent clusters for LOD (legacy)
     void mergeAdjacentClusters(const std::vector<Cluster>& sourceClusters,
                                std::vector<std::vector<uint32_t>>& clusterGroups);
+
+    // Merge adjacent clusters at a specific LOD level
+    void mergeAdjacentClustersAtLevel(const std::vector<Cluster>& allClusters,
+                                       const std::vector<uint32_t>& clusterIndices,
+                                       std::vector<std::vector<uint32_t>>& clusterGroups);
 
     // Compute LOD error for simplified geometry
     float computeSimplificationError(const std::vector<ClusterVertex>& original,

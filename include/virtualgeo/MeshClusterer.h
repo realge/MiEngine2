@@ -18,7 +18,15 @@ namespace MiEngine {
 struct TriangleAdjacency {
     std::vector<std::vector<uint32_t>> neighbors;  // neighbors[tri] = list of adjacent triangles
 
+    // Build adjacency from index buffer (for indexed meshes with shared vertices)
     void build(const std::vector<uint32_t>& indices, uint32_t vertexCount);
+
+    // Build adjacency from vertex positions (for non-indexed meshes or meshes with duplicate vertices)
+    // This uses spatial hashing to find triangles that share edge positions
+    void buildFromPositions(const std::vector<Vertex>& vertices,
+                            const std::vector<uint32_t>& indices,
+                            float positionTolerance = 0.0001f);
+
     void clear() { neighbors.clear(); }
 };
 

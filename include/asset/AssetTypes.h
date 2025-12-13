@@ -12,7 +12,8 @@ enum class AssetType : uint32_t {
     SkeletalMesh = 2,
     Texture = 3,
     HDR = 4,
-    Audio = 5
+    Audio = 5,
+    ClusteredMesh = 6      // Virtual Geometry clustered mesh (.micluster)
 };
 
 // Convert AssetType to string for display/serialization
@@ -23,6 +24,7 @@ inline const char* assetTypeToString(AssetType type) {
         case AssetType::Texture: return "Texture";
         case AssetType::HDR: return "HDR";
         case AssetType::Audio: return "Audio";
+        case AssetType::ClusteredMesh: return "ClusteredMesh";
         default: return "Unknown";
     }
 }
@@ -34,6 +36,7 @@ inline AssetType stringToAssetType(const std::string& str) {
     if (str == "Texture") return AssetType::Texture;
     if (str == "HDR") return AssetType::HDR;
     if (str == "Audio") return AssetType::Audio;
+    if (str == "ClusteredMesh") return AssetType::ClusteredMesh;
     return AssetType::Unknown;
 }
 

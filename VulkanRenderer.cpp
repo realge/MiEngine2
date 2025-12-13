@@ -466,6 +466,9 @@ void VulkanRenderer::initVulkan() {
 
     // Initialize Ray Tracing System (if supported)
     initRayTracing();
+
+    // Initialize Virtual Geometry System
+    initVirtualGeo();
 }
 
 bool VulkanRenderer::initRayTracing() {
@@ -511,6 +514,29 @@ bool VulkanRenderer::initRayTracing() {
     std::cout << "  - BLAS count: " << rayTracingSystem->getBLASCount() << std::endl;
     std::cout << "  - Max ray recursion: " << rayTracingSystem->getPipelineProperties().maxRayRecursionDepth << std::endl;
 
+    return true;
+}
+
+bool VulkanRenderer::initVirtualGeo() {
+    std::cout << "Initializing Virtual Geometry System..." << std::endl;
+
+    m_virtualGeoRenderer = std::make_unique<MiEngine::VirtualGeoRenderer>();
+
+    if (!m_virtualGeoRenderer->initialize(this)) {
+        std::cerr << "Failed to initialize Virtual Geometry Renderer" << std::endl;
+        m_virtualGeoRenderer.reset();
+        return false;
+    }
+
+    // Connect to debug panel if available
+    if (debugUI) {
+        auto vgPanel = debugUI->getPanel<MiEngine::VirtualGeoDebugPanel>("Virtual Geometry");
+        if (vgPanel) {
+            vgPanel->setVirtualGeoRenderer(m_virtualGeoRenderer.get());
+        }
+    }
+
+    std::cout << "Virtual Geometry System initialized successfully!" << std::endl;
     return true;
 }
 
@@ -717,17 +743,18 @@ void VulkanRenderer::createLogicalDevice() {
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
 
+    // Vulkan 1.2 features (required for indirect count and RT)
+    VkPhysicalDeviceVulkan12Features vulkan12Features{};
+    vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    vulkan12Features.bufferDeviceAddress = VK_TRUE;
+    vulkan12Features.descriptorIndexing = VK_TRUE;
+    vulkan12Features.runtimeDescriptorArray = VK_TRUE;
+    vulkan12Features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+    vulkan12Features.drawIndirectCount = VK_TRUE;  // Required for vkCmdDrawIndexedIndirectCount
+    vulkan12Features.pNext = nullptr;
+
     // If ray tracing is supported, use VkPhysicalDeviceFeatures2 with pNext chain
     if (g_RayTracingSupported) {
-        // Vulkan 1.2 features (required for RT)
-        VkPhysicalDeviceVulkan12Features vulkan12Features{};
-        vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-        vulkan12Features.bufferDeviceAddress = VK_TRUE;
-        vulkan12Features.descriptorIndexing = VK_TRUE;
-        vulkan12Features.runtimeDescriptorArray = VK_TRUE;
-        vulkan12Features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-        vulkan12Features.pNext = nullptr;
-
         // Acceleration structure features
         VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures{};
         asFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
@@ -754,7 +781,16 @@ void VulkanRenderer::createLogicalDevice() {
 
         std::cout << "Creating device with ray tracing features enabled" << std::endl;
     } else {
-        createInfo.pEnabledFeatures = &deviceFeatures;
+        // No ray tracing, but still need Vulkan 1.2 features for indirect count
+        VkPhysicalDeviceFeatures2 deviceFeatures2{};
+        deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        deviceFeatures2.features = deviceFeatures;
+        deviceFeatures2.pNext = &vulkan12Features;
+
+        createInfo.pEnabledFeatures = nullptr;  // Must be null when using pNext
+        createInfo.pNext = &deviceFeatures2;
+
+        std::cout << "Creating device with Vulkan 1.2 features (drawIndirectCount)" << std::endl;
     }
 
     if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS)
@@ -859,10 +895,10 @@ void VulkanRenderer::createRenderPass() {
     depthAttachment.format = findDepthFormat();
     depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
     depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;  // Store depth for Hi-Z occlusion culling next frame
     depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;  // Works for first frame and after Hi-Z sampling
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference colorAttachmentRef{};
@@ -2329,6 +2365,33 @@ void VulkanRenderer::drawFrame() {
     }
 
     // ========================================================================
+    // Virtual Geometry Compute Culling (before render pass)
+    // Only dispatch when GPU-driven mode is enabled
+    // ========================================================================
+    if (m_virtualGeoRenderer && m_virtualGeoRenderer->isInitialized() &&
+        m_virtualGeoRenderer->getMeshCount() > 0 && camera) {
+        // Get camera matrices
+        float ar = static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height);
+        glm::mat4 vgView = camera->getViewMatrix();
+        glm::mat4 vgProj = camera->getProjectionMatrix(ar, camera->getNearPlane(), camera->getFarPlane());
+        glm::vec3 vgCamPos = camera->getPosition();
+
+        // Update frame state and rebuild merged buffers if needed
+        m_virtualGeoRenderer->beginFrame(vgView, vgProj, vgCamPos);
+
+        // Dispatch compute culling only in GPU-driven mode
+        if (m_virtualGeoRenderer->isGPUDrivenEnabled()) {
+            // Build Hi-Z pyramid from previous frame's depth (before it gets cleared)
+            // This enables occlusion culling based on what was visible last frame
+            if (m_virtualGeoRenderer->isOcclusionCullingEnabled()) {
+                m_virtualGeoRenderer->buildHiZPyramid(commandBuffers[imageIndex], depthImageView);
+            }
+
+            m_virtualGeoRenderer->dispatchCulling(commandBuffers[imageIndex]);
+        }
+    }
+
+    // ========================================================================
     // PASS 2: MAIN RENDER PASS (Swapchain)
     // ========================================================================
     {
@@ -2443,6 +2506,15 @@ void VulkanRenderer::drawFrame() {
             proj[1][1] *= -1;
 
             world->draw(commandBuffers[imageIndex], view, proj, currentFrame);
+        }
+
+        // --- Render Virtual Geometry ---
+        if (m_virtualGeoRenderer && m_virtualGeoRenderer->isInitialized() &&
+            m_virtualGeoRenderer->getMeshCount() > 0) {
+            m_virtualGeoRenderer->draw(commandBuffers[imageIndex]);
+
+            // Hi-Z debug visualization (renders fullscreen overlay if enabled)
+            m_virtualGeoRenderer->drawHiZDebug(commandBuffers[imageIndex]);
         }
 
         // --- Render Water ---
@@ -3076,7 +3148,7 @@ void VulkanRenderer::initializeDebugUI() {
     auto sceneManagerPanel = std::make_shared<ScenePanel>(this);
     auto actorSpawnerPanel = std::make_shared<ActorSpawnerPanel>(this);
     auto rayTracingPanel = std::make_shared<RayTracingDebugPanel>(this);
-    auto virtualGeoPanel = std::make_shared<MiEngine::VirtualGeoDebugPanel>();
+    auto virtualGeoPanel = std::make_shared<MiEngine::VirtualGeoDebugPanel>(this);
 
     debugUI->addPanel(cameraPanel);
     debugUI->addPanel(renderPanel);
@@ -3184,13 +3256,19 @@ void VulkanRenderer::createDepthResources() {
     createImage(swapChainExtent.width, swapChainExtent.height,
                depthFormat,
                VK_IMAGE_TILING_OPTIMAL,
-               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+               VK_IMAGE_USAGE_SAMPLED_BIT |      // For Hi-Z occlusion culling
+               VK_IMAGE_USAGE_TRANSFER_SRC_BIT,  // For blitting to Hi-Z
                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                depthImage,
                depthImageMemory);
 
     depthImageView = createImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    // Note: Depth buffer starts in UNDEFINED layout. The first render pass will
+    // transition it using LOAD_OP_CLEAR. For Hi-Z, we track first-frame separately.
 }
+
 void VulkanRenderer::createDefaultTexture() {
     // Create a 1x1 white texture as default
     unsigned char whitePixel[4] = {255, 255, 255, 255};
@@ -3809,6 +3887,12 @@ void VulkanRenderer::cleanup() {
     }
     if (shadowSystem) {
         shadowSystem.reset();
+    }
+
+    // Cleanup Virtual Geometry Renderer
+    // This must be done before destroying the device as it holds buffers
+    if (m_virtualGeoRenderer) {
+        m_virtualGeoRenderer.reset();
     }
 
     // Cleanup Ray Tracing System

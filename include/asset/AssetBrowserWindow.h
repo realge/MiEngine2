@@ -45,11 +45,19 @@ private:
     void handleReimport();
     void handleDelete();
     void handleRefresh();
+    void handleGenerateClusteredMesh();
+    void handleLoadClusteredMesh();
+
+    // Clustered mesh generation popup
+    void drawClusteringPopup();
+    void drawClusteredMeshInfoPopup();
 
     // Helpers
     void refreshAssetList();
     const char* getStatusText(bool cacheValid) const;
     const char* getTypeIcon(AssetType type) const;
+    bool hasClusteredMeshCache(const std::string& assetName) const;
+    std::string getClusteredMeshCachePath(const std::string& assetName) const;
 
     VulkanRenderer* m_renderer;
     Scene* m_scene = nullptr;
@@ -63,6 +71,17 @@ private:
     // Cached list for display (after filtering)
     std::vector<AssetEntry> m_displayedAssets;
     bool m_needsRefresh = true;
+
+    // Clustering popup state
+    bool m_showClusteringPopup = false;
+    std::string m_clusteringAssetUuid;
+    int m_clusterSize = 128;
+    int m_maxLodLevels = 8;
+    bool m_generateDebugColors = true;
+
+    // Clustered mesh info popup state
+    bool m_showClusteredMeshInfo = false;
+    std::string m_clusteredMeshInfoUuid;
 };
 
 } // namespace MiEngine

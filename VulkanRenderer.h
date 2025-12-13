@@ -36,6 +36,7 @@
 #include "include/asset/MeshLibrary.h"
 #include "include/core/MiWorld.h"
 #include "include/raytracing/RayTracingSystem.h"
+#include "include/virtualgeo/VirtualGeoRenderer.h"
 
 class IBLSystem;
 class ShadowSystem;
@@ -421,6 +422,19 @@ public:
     // Initialize ray tracing (call after device creation)
     bool initRayTracing();
 
+    // ========================================================================
+    // Virtual Geometry System
+    // ========================================================================
+private:
+    std::unique_ptr<MiEngine::VirtualGeoRenderer> m_virtualGeoRenderer;
+
+public:
+    // Virtual Geometry accessors
+    MiEngine::VirtualGeoRenderer* getVirtualGeoRenderer() const { return m_virtualGeoRenderer.get(); }
+
+    // Initialize virtual geometry renderer
+    bool initVirtualGeo();
+
 private:
     std::shared_ptr<Texture> defaultTexture;
     // Create a default white texture
@@ -442,6 +456,7 @@ public:
     VkPhysicalDevice getPhysicalDevice() const { return physicalDevice; }
     VkCommandPool getCommandPool() const { return commandPool; }
     VkQueue getGraphicsQueue() const { return graphicsQueue; }
+    VkImage getDepthImage() const { return depthImage; }
     void recreateSwapChain();
     void cleanupSwapChain();
 

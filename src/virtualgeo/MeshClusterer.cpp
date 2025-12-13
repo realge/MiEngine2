@@ -1,16 +1,11 @@
 #include "include/virtualgeo/MeshClusterer.h"
+#include "include/virtualgeo/GraphPartitioner.h"
 #include "include/mesh/Mesh.h"
 #include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <queue>
 #include <cmath>
-
-// METIS library - enable if installed via vcpkg
-// To enable: add VGEO_USE_METIS to preprocessor definitions and link metis library
-#ifdef VGEO_USE_METIS
-#include <metis.h>
-#endif
 
 namespace MiEngine {
 
@@ -74,6 +69,92 @@ void TriangleAdjacency::build(const std::vector<uint32_t>& indices, uint32_t ver
     }
 }
 
+void TriangleAdjacency::buildFromPositions(const std::vector<Vertex>& vertices,
+                                            const std::vector<uint32_t>& indices,
+                                            float positionTolerance) {
+    uint32_t numTriangles = static_cast<uint32_t>(indices.size()) / 3;
+    neighbors.resize(numTriangles);
+
+    // Use spatial hashing to find vertices at the same position
+    // Hash key is quantized position
+    float invTolerance = 1.0f / positionTolerance;
+
+    auto hashPosition = [invTolerance](const glm::vec3& pos) -> uint64_t {
+        int32_t x = static_cast<int32_t>(std::floor(pos.x * invTolerance));
+        int32_t y = static_cast<int32_t>(std::floor(pos.y * invTolerance));
+        int32_t z = static_cast<int32_t>(std::floor(pos.z * invTolerance));
+        // Combine into single hash
+        uint64_t hx = static_cast<uint64_t>(x + 1000000) & 0xFFFFF;  // 20 bits
+        uint64_t hy = static_cast<uint64_t>(y + 1000000) & 0xFFFFF;  // 20 bits
+        uint64_t hz = static_cast<uint64_t>(z + 1000000) & 0xFFFFF;  // 20 bits
+        return (hx << 40) | (hy << 20) | hz;
+    };
+
+    // Map from position hash to canonical vertex index
+    std::unordered_map<uint64_t, uint32_t> positionToCanonical;
+    std::vector<uint32_t> vertexToCanonical(vertices.size());
+
+    for (uint32_t i = 0; i < vertices.size(); i++) {
+        uint64_t hash = hashPosition(vertices[i].position);
+        auto it = positionToCanonical.find(hash);
+        if (it != positionToCanonical.end()) {
+            vertexToCanonical[i] = it->second;
+        } else {
+            positionToCanonical[hash] = i;
+            vertexToCanonical[i] = i;
+        }
+    }
+
+    // Now build edge-to-triangle map using canonical vertex indices
+    // Edge key = sorted pair of canonical vertex indices
+    std::unordered_map<uint64_t, std::vector<uint32_t>> edgeToTriangles;
+    uint32_t numCanonical = static_cast<uint32_t>(positionToCanonical.size());
+
+    auto makeEdgeKey = [numCanonical](uint32_t v0, uint32_t v1) -> uint64_t {
+        if (v0 > v1) std::swap(v0, v1);
+        return static_cast<uint64_t>(v0) * (numCanonical + 1) + v1;
+    };
+
+    for (uint32_t tri = 0; tri < numTriangles; tri++) {
+        uint32_t i0 = vertexToCanonical[indices[tri * 3 + 0]];
+        uint32_t i1 = vertexToCanonical[indices[tri * 3 + 1]];
+        uint32_t i2 = vertexToCanonical[indices[tri * 3 + 2]];
+
+        // Skip degenerate triangles
+        if (i0 == i1 || i1 == i2 || i2 == i0) continue;
+
+        edgeToTriangles[makeEdgeKey(i0, i1)].push_back(tri);
+        edgeToTriangles[makeEdgeKey(i1, i2)].push_back(tri);
+        edgeToTriangles[makeEdgeKey(i2, i0)].push_back(tri);
+    }
+
+    // Build adjacency from shared edges
+    for (const auto& [edge, triangles] : edgeToTriangles) {
+        for (size_t i = 0; i < triangles.size(); i++) {
+            for (size_t j = i + 1; j < triangles.size(); j++) {
+                uint32_t t0 = triangles[i];
+                uint32_t t1 = triangles[j];
+                neighbors[t0].push_back(t1);
+                neighbors[t1].push_back(t0);
+            }
+        }
+    }
+
+    // Remove duplicates in neighbor lists
+    for (auto& neighborList : neighbors) {
+        std::sort(neighborList.begin(), neighborList.end());
+        neighborList.erase(std::unique(neighborList.begin(), neighborList.end()), neighborList.end());
+    }
+
+    // Debug: count total edges
+    uint32_t totalEdges = 0;
+    for (const auto& nl : neighbors) {
+        totalEdges += static_cast<uint32_t>(nl.size());
+    }
+    std::cout << "  Position-based adjacency: " << numCanonical << " unique positions, "
+              << totalEdges / 2 << " edges" << std::endl;
+}
+
 // ============================================================================
 // MeshClusterer Implementation
 // ============================================================================
@@ -83,11 +164,9 @@ MeshClusterer::MeshClusterer() {}
 MeshClusterer::~MeshClusterer() {}
 
 bool MeshClusterer::isMetisAvailable() {
-#ifdef VGEO_USE_METIS
+    // We now use our built-in GraphPartitioner (METIS-like algorithm)
+    // No external dependency needed
     return true;
-#else
-    return false;
-#endif
 }
 
 bool MeshClusterer::clusterMesh(const std::vector<Vertex>& vertices,
@@ -113,29 +192,74 @@ bool MeshClusterer::clusterMesh(const std::vector<Vertex>& vertices,
     }
 
     // Step 1: Build triangle adjacency graph
+    std::cout << "  Step 1: Building adjacency graph..." << std::endl;
     TriangleAdjacency adjacency;
     buildAdjacencyGraph(indices, numVertices, adjacency);
+
+    // Check if adjacency graph has edges - if not, mesh likely has duplicate vertices
+    // (e.g., 3 unique vertices per triangle with no sharing)
+    uint32_t totalEdges = 0;
+    for (const auto& neighbors : adjacency.neighbors) {
+        totalEdges += static_cast<uint32_t>(neighbors.size());
+    }
+    totalEdges /= 2;  // Each edge counted twice
+
+    if (totalEdges == 0 && numTriangles > 1) {
+        std::cout << "  Index-based adjacency found no edges (mesh has duplicate vertices)" << std::endl;
+        std::cout << "  Rebuilding adjacency using vertex positions..." << std::endl;
+        adjacency.buildFromPositions(vertices, indices, 0.0001f);
+    } else {
+        std::cout << "  Adjacency built: " << adjacency.neighbors.size() << " triangles, "
+                  << totalEdges << " edges" << std::endl;
+    }
 
     // Step 2: Partition triangles into clusters
     uint32_t targetClusterCount = (numTriangles + options.targetClusterSize - 1) / options.targetClusterSize;
     targetClusterCount = std::max(targetClusterCount, 1u);
+    std::cout << "  Step 2: Partitioning into " << targetClusterCount << " clusters..." << std::endl;
+
+    // Compute triangle centroids for spatial partitioning
+    std::vector<glm::vec3> triangleCentroids(numTriangles);
+    for (uint32_t t = 0; t < numTriangles; t++) {
+        uint32_t i0 = indices[t * 3 + 0];
+        uint32_t i1 = indices[t * 3 + 1];
+        uint32_t i2 = indices[t * 3 + 2];
+        triangleCentroids[t] = (vertices[i0].position + vertices[i1].position + vertices[i2].position) / 3.0f;
+    }
 
     std::vector<uint32_t> clusterAssignment(numTriangles);
 
     auto partitionStart = std::chrono::high_resolution_clock::now();
 
-#ifdef VGEO_USE_METIS
-    if (!partitionWithMetis(adjacency, numTriangles, targetClusterCount, clusterAssignment)) {
+    // Use graph partitioner for cluster coherence
+    GraphPartitioner partitioner;
+    GraphPartitionerOptions partOpts;
+    partOpts.targetPartitions = targetClusterCount;
+    partOpts.minPartitionSize = options.minClusterSize;
+    partOpts.verbose = options.verbose;
+
+#if USE_METIS_LIBRARY
+    // Use METIS library with spatial post-processing (best quality)
+    if (!partitioner.partitionMETISSpatial(adjacency.neighbors, triangleCentroids, numTriangles, partOpts, clusterAssignment)) {
         if (options.verbose) {
-            std::cout << "MeshClusterer: METIS failed, falling back to greedy partitioning" << std::endl;
+            std::cout << "MeshClusterer: METIS failed, trying custom spatial partitioner" << std::endl;
         }
-        partitionGreedy(adjacency, numTriangles, options.targetClusterSize, clusterAssignment);
+#endif
+        // Fallback: Use custom spatial partitioning for compact clusters
+        if (!partitioner.partitionSpatial(adjacency.neighbors, triangleCentroids, numTriangles, partOpts, clusterAssignment)) {
+            if (options.verbose) {
+                std::cout << "MeshClusterer: Spatial partitioner failed, trying regular partitioner" << std::endl;
+            }
+            // Fallback to regular partitioner
+            if (!partitioner.partition(adjacency.neighbors, numTriangles, partOpts, clusterAssignment)) {
+                if (options.verbose) {
+                    std::cout << "MeshClusterer: Partitioner failed, falling back to greedy" << std::endl;
+                }
+                partitionGreedy(adjacency, numTriangles, options.targetClusterSize, clusterAssignment);
+            }
+        }
+#if USE_METIS_LIBRARY
     }
-#else
-    if (options.verbose) {
-        std::cout << "MeshClusterer: Using greedy partitioning (METIS not available)" << std::endl;
-    }
-    partitionGreedy(adjacency, numTriangles, options.targetClusterSize, clusterAssignment);
 #endif
 
     auto partitionEnd = std::chrono::high_resolution_clock::now();
@@ -191,77 +315,6 @@ void MeshClusterer::buildAdjacencyGraph(const std::vector<uint32_t>& indices,
                                          uint32_t vertexCount,
                                          TriangleAdjacency& adjacency) {
     adjacency.build(indices, vertexCount);
-}
-
-bool MeshClusterer::partitionWithMetis(const TriangleAdjacency& adjacency,
-                                        uint32_t numTriangles,
-                                        uint32_t targetClusterCount,
-                                        std::vector<uint32_t>& clusterAssignment) {
-#ifdef VGEO_USE_METIS
-    if (targetClusterCount <= 1) {
-        std::fill(clusterAssignment.begin(), clusterAssignment.end(), 0);
-        return true;
-    }
-
-    // Build METIS graph format
-    // xadj: index into adjncy for each vertex (triangle)
-    // adjncy: concatenated adjacency lists
-
-    std::vector<idx_t> xadj(numTriangles + 1);
-    std::vector<idx_t> adjncy;
-
-    xadj[0] = 0;
-    for (uint32_t i = 0; i < numTriangles; i++) {
-        for (uint32_t neighbor : adjacency.neighbors[i]) {
-            adjncy.push_back(static_cast<idx_t>(neighbor));
-        }
-        xadj[i + 1] = static_cast<idx_t>(adjncy.size());
-    }
-
-    // METIS parameters
-    idx_t nvtxs = static_cast<idx_t>(numTriangles);
-    idx_t ncon = 1;  // Number of balancing constraints
-    idx_t nparts = static_cast<idx_t>(targetClusterCount);
-    idx_t objval;    // Output: edge-cut
-
-    std::vector<idx_t> part(numTriangles);
-
-    // METIS options
-    idx_t options[METIS_NOPTIONS];
-    METIS_SetDefaultOptions(options);
-    options[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_CUT;  // Minimize edge cut
-    options[METIS_OPTION_NCUTS] = 1;   // Number of different partitionings to compute
-    options[METIS_OPTION_NITER] = 10;  // Refinement iterations
-
-    // Call METIS
-    int result = METIS_PartGraphKway(&nvtxs,
-                                     &ncon,
-                                     xadj.data(),
-                                     adjncy.data(),
-                                     nullptr,  // vertex weights
-                                     nullptr,  // vertex sizes
-                                     nullptr,  // edge weights
-                                     &nparts,
-                                     nullptr,  // target partition weights
-                                     nullptr,  // ubvec
-                                     options,
-                                     &objval,
-                                     part.data());
-
-    if (result != METIS_OK) {
-        std::cerr << "MeshClusterer: METIS partitioning failed" << std::endl;
-        return false;
-    }
-
-    // Copy results
-    for (uint32_t i = 0; i < numTriangles; i++) {
-        clusterAssignment[i] = static_cast<uint32_t>(part[i]);
-    }
-
-    return true;
-#else
-    return false;
-#endif
 }
 
 void MeshClusterer::partitionGreedy(const TriangleAdjacency& adjacency,

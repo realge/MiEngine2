@@ -79,12 +79,12 @@
     <LibraryPath>C:\VulkanSDK\1.4.304.1\Lib;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\lib-vc2022;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\VulkanSDK\1.4.304.1\Include;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\include;C:\Users\13667\imgui;C:\Users\13667\imgui\backends;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\VulkanSDK\1.4.304.1\Lib;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\lib-vc2022;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\VulkanSDK\1.4.304.1\Include;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\include;C:\Users\13667\imgui;C:\Users\13667\imgui\backends;C:\vcpkg\installed\x64-windows\include;$(ProjectDir)external\metis\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\VulkanSDK\1.4.304.1\Lib;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\lib-vc2022;C:\vcpkg\installed\x64-windows\lib;$(ProjectDir)external\metis\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>C:\VulkanSDK\1.4.304.1\Include;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\include;C:\Users\13667\imgui;C:\Users\13667\imgui\backends;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\VulkanSDK\1.4.304.1\Lib;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\lib-vc2022;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\VulkanSDK\1.4.304.1\Include;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\include;C:\Users\13667\imgui;C:\Users\13667\imgui\backends;C:\vcpkg\installed\x64-windows\include;$(ProjectDir)external\metis\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\VulkanSDK\1.4.304.1\Lib;C:\Users\13667\Downloads\glfw-3.4.bin.WIN64\glfw-3.4.bin.WIN64\lib-vc2022;C:\vcpkg\installed\x64-windows\lib;$(ProjectDir)external\metis\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -132,7 +132,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;libfbxsdk.lib;libxml2.lib;zlib.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;libfbxsdk.lib;libxml2.lib;zlib.lib;dwmapi.lib;metis.lib;GKlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\lib\x64\debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
@@ -155,7 +155,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;libfbxsdk.lib;libxml2.lib;zlib.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;libfbxsdk.lib;libxml2.lib;zlib.lib;dwmapi.lib;metis.lib;GKlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7\lib\x64\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
@@ -212,7 +212,10 @@
     <ClCompile Include="src\mesh\Mesh.cpp" />
     <ClCompile Include="src\mesh\SkeletalMesh.cpp" />
     <ClCompile Include="src\virtualgeo\ClusterDAGBuilder.cpp" />
+    <ClCompile Include="src\virtualgeo\ClusteredMeshCache.cpp" />
+    <ClCompile Include="src\virtualgeo\GraphPartitioner.cpp" />
     <ClCompile Include="src\virtualgeo\MeshClusterer.cpp" />
+    <ClCompile Include="src\virtualgeo\VirtualGeoRenderer.cpp" />
     <ClCompile Include="src\physics\ColliderComponent.cpp" />
     <ClCompile Include="src\physics\PhysicsWorld.cpp" />
     <ClCompile Include="src\physics\RigidBodyComponent.cpp" />
@@ -277,7 +280,10 @@
     <ClInclude Include="include\mesh\Mesh.h" />
     <ClInclude Include="include\mesh\SkeletalMesh.h" />
     <ClInclude Include="include\virtualgeo\ClusterDAGBuilder.h" />
+    <ClInclude Include="include\virtualgeo\ClusteredMeshCache.h" />
+    <ClInclude Include="include\virtualgeo\GraphPartitioner.h" />
     <ClInclude Include="include\virtualgeo\MeshClusterer.h" />
+    <ClInclude Include="include\virtualgeo\VirtualGeoRenderer.h" />
     <ClInclude Include="include\virtualgeo\VirtualGeoTypes.h" />
     <ClInclude Include="include\physics\ColliderComponent.h" />
     <ClInclude Include="include\physics\Component.h" />
@@ -305,6 +311,7 @@
     <ClInclude Include="src\Games\RayTracingTest\RayTracingTestGame.h" />
     <ClInclude Include="src\Games\ShadowTest\ShadowTestGame.h" />
     <ClInclude Include="src\Games\SkeletalAnimationTest\SkeletalAnimationTestGame.h" />
+    <ClInclude Include="src\Games\VirtualGeoTest\VirtualGeoTestGame.h" />
     <ClInclude Include="src\Games\WaterTest\WaterTestGame.h" />
     <ClInclude Include="src\SandboxGame.h" />
     <ClInclude Include="VulkanRenderer.h" />
@@ -312,6 +319,8 @@
   <ItemGroup>
     <Content Include="shaders\ComputerShader.frag.spv" />
     <Content Include="shaders\ComputeShader.frag" />
+    <Content Include="shaders\culling\frustum_cull.comp" />
+    <Content Include="shaders\culling\frustum_cull.comp.spv" />
     <Content Include="shaders\fullscreen.vert" />
     <Content Include="shaders\fullscreen_vert.spv" />
     <Content Include="shaders\pbr.frag" />
@@ -334,6 +343,18 @@
     <Content Include="shaders\tonemapping_frag.spv" />
     <Content Include="shaders\VertexShader.vert" />
     <Content Include="shaders\VertexShader.vert.spv" />
+    <Content Include="shaders\virtualgeo\cluster.frag" />
+    <Content Include="shaders\virtualgeo\cluster.frag.spv" />
+    <Content Include="shaders\virtualgeo\cluster.vert" />
+    <Content Include="shaders\virtualgeo\cluster.vert.spv" />
+    <Content Include="shaders\virtualgeo\cluster_cull.comp" />
+    <Content Include="shaders\virtualgeo\cluster_cull.comp.spv" />
+    <Content Include="shaders\virtualgeo\hiz_debug.frag" />
+    <Content Include="shaders\virtualgeo\hiz_debug.frag.spv" />
+    <Content Include="shaders\virtualgeo\hiz_debug.vert" />
+    <Content Include="shaders\virtualgeo\hiz_debug.vert.spv" />
+    <Content Include="shaders\virtualgeo\hiz_generate.comp" />
+    <Content Include="shaders\virtualgeo\hiz_generate.comp.spv" />
     <Content Include="shaders\water.vert" />
     <Content Include="shaders\water.vert.spv" />
     <Content Include="shaders\water.frag" />
